@@ -14,7 +14,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.SiteRuntime do
   require Ash.Query
 
   alias MishkaCmsCore.Runtime.Compilers.{ModuleCompiler, Helpers}
-  alias MishkaCmsCore.Runtime.States.{AssetsState, WebRunTimeMetaDataState}
+  alias MishkaCmsCore.Runtime.States.{AssetsState, CompileFailureState, WebRunTimeMetaDataState}
 
   # The resources that compile into their own BEAM module (the only ones to
   # unload). JsHook/Stylesheet have no per-record module — they live in the
@@ -78,16 +78,17 @@ defmodule MishkaCmsCore.Runtime.Handlers.SiteRuntime do
   end
 
   @doc """
-  Unloads the given module specs of the site `site_name`, and nothing else — its cached CSS/JS,
-  routing and templates stay. Returns how many were loaded. A module is compiled for its site's
-  name and host, so a new host needs new ones: `BootHandler.compile_site/2` builds them again, and
-  a lazy one is built by the first request for it.
+  Unloads the given module specs of the site `site_name`, and forgets the compile failures recorded
+  for them, and nothing else — its cached CSS/JS, routing and templates stay. Returns how many were
+  loaded. A module is compiled for its site's name and host, so a new host needs new ones:
+  `BootHandler.compile_site/2` builds them again, and a lazy one is built by the first request for it.
   """
   def unload_modules(site_name, module_specs) do
     Enum.count(module_specs, fn %{"type" => type, "key" => key} ->
       module = Helpers.module_name(key, site_name, type)
       loaded? = Helpers.loaded?(module)
       ModuleCompiler.unload(module)
+      CompileFailureState.clear(module)
       loaded?
     end)
   end

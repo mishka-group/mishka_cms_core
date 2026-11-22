@@ -13,13 +13,15 @@ defmodule MishkaCmsCore.SidebarTest do
   """
   use MishkaCmsCore.DataCase
 
+  import Phoenix.LiveViewTest, only: [render_component: 2]
+
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsCore.Sidebar.{Group, Item}
-  alias MishkaCmsCore.Test.Plugins.NestedMenu
+  alias MishkaCmsCore.Test.Plugins.{CreditedMenu, NestedMenu}
   alias MishkaInstaller.Event.{Event, EventHandler}
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.{Account, Runtime}
 
@@ -467,6 +469,39 @@ defmodule MishkaCmsCore.SidebarTest do
       assert Sidebar.credit(MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index) == nil
       assert Sidebar.credit(SomeModule.Nobody.Declared) == nil
       assert Sidebar.credit(nil) == nil
+    end
+  end
+
+  describe "footer?/1 — whether the page draws the Powered by line" do
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: CreditedMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, CreditedMenu, false) end)
+    end
+
+    test "every page of an extension that declares credit_footer: false draws none" do
+      refute Sidebar.footer?(CreditedMenu.credited())
+      refute Sidebar.footer?(CreditedMenu.silent())
+    end
+
+    test "a core page, an undeclared page and an extension that keeps its line draw it" do
+      assert Sidebar.footer?(MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index)
+      assert Sidebar.footer?(SomeModule.Nobody.Declared)
+      assert Sidebar.footer?(nil)
+      assert Sidebar.footer?(CreditedMenu.kept())
+      assert %{name: "Kept"} = Sidebar.credit(CreditedMenu.kept())
+    end
+
+    test "the layout draws no footer when it is not shown, and the credit when it is" do
+      assert render_component(&MishkaCmsCore.Layouts.footer_credit/1, shown: false) == ""
+      assert render_component(&MishkaCmsCore.Layouts.footer_credit/1, shown: true) =~ "Powered by"
     end
   end
 

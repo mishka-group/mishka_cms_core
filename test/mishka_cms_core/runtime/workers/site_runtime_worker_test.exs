@@ -14,6 +14,7 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorkerTest do
   @repo Application.compile_env!(:mishka_cms_core, :repo)
   use Oban.Testing, repo: @repo
 
+  alias MishkaCmsCore.Runtime.{ErrorAddress, ErrorPage}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker, as: Worker
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState, WebRunTimeMetaDataState}
@@ -70,6 +71,50 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorkerTest do
     assert :ok = Worker.perform(job("recompile", site))
 
     assert WebRunTimeMetaDataState.count_by_site(site.name) == 1
+  end
+
+  describe "a site's name" do
+    test "changed, moves its Error Page to the address of the new one" do
+      name = "rename-#{System.unique_integer([:positive])}"
+      site = create_site!(name: name, host: name <> ".test", active: true)
+      error_page = create_error_page!(site_id: site.id)
+      old_name = site.name
+
+      renamed =
+        site
+        |> Ash.Changeset.for_update(:update, %{name: old_name <> "-new"}, authorize?: false)
+        |> Ash.update!()
+
+      on_exit(fn ->
+        SiteState.delete(site.id)
+        WebRunTimeMetaDataState.delete_by_site(renamed.name)
+      end)
+
+      path = ErrorAddress.path(renamed.name)
+      job = job("rename", renamed)
+      job = %{job | args: %{job.args | "old_name" => old_name}}
+
+      # Twice, as a job that is retried.
+      for _run <- [:first, :retried] do
+        assert :ok = Worker.perform(job)
+
+        assert Ash.get!(ErrorPage, error_page.id, tenant: site.id, authorize?: false).path == path
+
+        assert {:ok, %{section: "ErrorPage", id: id}} =
+                 WebRunTimeMetaDataState.find_by_path_and_site(path, renamed.name)
+
+        assert id == error_page.id
+      end
+    end
+
+    test "changed, rebuilds a site with no Error Page" do
+      site = create_site!()
+      create_page!(site_id: site.id)
+      on_exit(fn -> WebRunTimeMetaDataState.delete_by_site(site.name) end)
+
+      assert :ok = Worker.perform(job("rename", site))
+      assert WebRunTimeMetaDataState.count_by_site(site.name) == 1
+    end
   end
 
   describe "a site's host" do

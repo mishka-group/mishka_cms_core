@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
   alias MishkaCmsCore.Install.StarterContent
   alias MishkaCmsCore.Runtime.Authoring.Tree
-  alias MishkaCmsCore.Runtime.Compilers.{Helpers, LiveViewCompiler}
+  alias MishkaCmsCore.Runtime.Compilers.{ErrorCompiler, Helpers, LiveViewCompiler, ModuleCompiler}
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
 
   alias MishkaCmsCore.Runtime.{
@@ -756,6 +756,65 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     StarterContent.seed!(site, root_layout_template: "<html><body>mine</body></html>")
 
     assert one(ErrorPage, site).root_layout_template == "<html><body>mine</body></html>"
+  end
+
+  # The page is drawn by a controller, so nothing of the app's own root layout is on it: it sets the
+  # theme the visitor chose by itself, in a script the Content-Security-Policy lets run, and in one that
+  # is there for an error raised before the policy was set.
+  describe "the error page" do
+    setup %{site: site} do
+      StarterContent.seed!(site)
+      error_page = one(ErrorPage, site)
+      module = Module.concat(__MODULE__, "Errors#{System.unique_integer([:positive])}")
+
+      {:ok, ^module, _diagnostics} =
+        error_page
+        |> Map.take([:error_pages, :helpers, :root_layout_template])
+        |> Map.merge(%{title: "errors", site: site.name, site_id: site.id, error_module: module})
+        |> ErrorCompiler.build_module()
+        |> ModuleCompiler.compile_module()
+
+      on_exit(fn -> ModuleCompiler.unload(module) end)
+
+      draw = fn status, assigns ->
+        module
+        |> ErrorCompiler.render_page(%Plug.Conn{assigns: assigns}, status)
+        |> IO.iodata_to_binary()
+        |> LazyHTML.from_document()
+      end
+
+      {:ok, draw: draw}
+    end
+
+    test "takes the dark theme the visitor chose, with the response's nonce and without one", %{
+      draw: draw
+    } do
+      for status <- [404, 500, :offline], assigns <- [%{csp_nonce: "n0nce"}, %{}] do
+        script = status |> draw.(assigns) |> LazyHTML.query("head script")
+
+        assert LazyHTML.text(script) =~ ~s|localStorage.getItem("phx:theme")|
+        assert LazyHTML.text(script) =~ "data-theme"
+        assert LazyHTML.attribute(script, "nonce") == [assigns[:csp_nonce] || ""]
+      end
+    end
+
+    test "pairs every colour with a dark one, and its link is tall enough to press", %{draw: draw} do
+      for status <- [404, 500, :offline] do
+        body = status |> draw.(%{}) |> LazyHTML.query("body")
+
+        for class <- body |> LazyHTML.query("[class]") |> LazyHTML.attribute("class"),
+            colour <- class |> String.split() |> Enum.filter(&colour?/1) do
+          [kind | _colour] = String.split(colour, "-", parts: 2)
+          assert class =~ "dark:#{kind}-", "#{colour} has no dark twin in #{class}"
+        end
+
+        assert [link] = body |> LazyHTML.query("a") |> LazyHTML.attribute("class")
+        assert "min-h-11" in String.split(link)
+      end
+    end
+
+    defp colour?(class),
+      do: class =~ ~r/^(bg|text|border)-(\[#|white$|ground$)/
   end
 
   @paired ~w(page fg dim subtle faint surface edge sunk chip dot wash)

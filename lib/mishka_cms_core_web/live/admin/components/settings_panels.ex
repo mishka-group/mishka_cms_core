@@ -69,11 +69,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.SettingsPanels do
 
   defp panel?(_other), do: false
 
-  defp drawn_by?(%{module: module} = panel) when is_atom(module) and not is_nil(module),
-    do: not is_map_key(panel, :render)
+  @doc """
+  Whether a plugin's entry names exactly one way to draw it: a LiveComponent `module:` or a
+  function component `render:` taking one argument. The admin top bar's items
+  (`MishkaCmsCore.Layouts.TopbarItems`) are checked the same way.
+  """
+  @spec drawn_by?(map()) :: boolean()
+  def drawn_by?(%{module: module} = entry) when is_atom(module) and not is_nil(module),
+    do: not is_map_key(entry, :render)
 
-  defp drawn_by?(%{render: render} = panel) when is_function(render, 1),
-    do: not is_map_key(panel, :module)
+  def drawn_by?(%{render: render} = entry) when is_function(render, 1),
+    do: not is_map_key(entry, :module)
 
-  defp drawn_by?(_panel), do: false
+  def drawn_by?(_entry), do: false
 end

@@ -63,11 +63,19 @@ defmodule MishkaCmsCore.Builder.Events do
   | `builder:token:before_set` | `%{key, value, site_id, site_name, actor_id, error}` |
   | `builder:ai:before_ask` | `%{prompt, scope, backend, section, resource_id, site_id, actor_id, error}` |
   | `builder:form:role` | `%{role, entry}` |
+  | `builder:component:notes` | `%{notes, component, attrs, node_id, site_id, site_name}` |
   | `page:form:submitted` | `%{form, values, page, site_id, handled}` |
 
   `builder:form:role` carries a component's INFERRED part in a form (`:wrapper`, `:field`,
   `:submit`, `:none`, …) and the palette entry it was read from; answer another role to change it.
   A kit's own `extra.form` declaration never passes through it. See `form_role/2`.
+
+  `builder:component:notes` is what an extension tells the AUTHOR about one placed component: a
+  product block whose product was archived, a list pointed at a category that is gone. `component`
+  is the component's name, `attrs` its literal attributes by name as written (an `{...}` expression
+  is left out, the editor cannot resolve it), and a plugin appends `%{severity, message, detail}`
+  notes to `notes`, `severity` `:warning` or `:note`. The editor draws them on the canvas, in the
+  Inspector and in the Audit rail; a published page never asks. See `component_notes/1`.
 
   `page:form:submitted` is the one row here that fires from a published page rather than from the
   editor, and the one whose plugins WRITE. A plugin that stored the submission answers with
@@ -603,6 +611,74 @@ defmodule MishkaCmsCore.Builder.Events do
       %{role: answered} when answered in @form_roles -> answered
       _unchanged -> role
     end
+  end
+
+  @doc """
+  What the extensions have to tell the author about one placed component, as a list of notes:
+  `%{severity: :warning | :note, message: String.t(), detail: String.t() | nil}`.
+
+  `meta` names the component and where it is: `component` (its name), `attrs` (its literal
+  attributes by name), `node_id`, `site_id` and `site_name`. Editor only: a published page never
+  fires it, so a plugin may read what it needs to judge the block (one read for one block).
+
+  A plugin appends to `:notes`:
+
+      use MishkaInstaller.Event.Hook, event: "builder:component:notes"
+
+      def call(%{component: "acme-product", attrs: %{"product" => slug}} = payload) do
+        note = %{severity: :warning, message: "The product \#{slug} was archived.", detail: nil}
+        {:reply, %{payload | notes: payload.notes ++ [note]}}
+      end
+
+      def call(payload), do: {:reply, payload}
+
+  A note of another shape is dropped. With no plugin, while the plugins cannot run, or when one of
+  them raises, exits or answers something that is not the payload, the answer is `[]`: a broken
+  extension costs the author its notes, never the editor.
+  """
+  @spec component_notes(map()) :: [map()]
+  def component_notes(meta) when is_map(meta) do
+    "builder:component:notes"
+    |> MishkaInstaller.Event.Hook.call(Map.put(meta, :notes, []),
+      cannot_run: :none,
+      raised: :none
+    )
+    |> answered_notes()
+  catch
+    :exit, _reason -> []
+    :throw, _value -> []
+  end
+
+  defp answered_notes(%{notes: notes}) when is_list(notes), do: Enum.filter(notes, &note?/1)
+  defp answered_notes(:none), do: []
+
+  defp answered_notes(other) do
+    Strict.violation!(
+      "Builder.Events.component_notes/1",
+      "builder:component:notes answered #{inspect(other)}, expected a map carrying :notes"
+    )
+
+    []
+  end
+
+  defp note?(%{severity: severity, message: message} = note)
+       when severity in [:warning, :note] and is_binary(message) and message != "" do
+    case Map.get(note, :detail) do
+      detail when is_nil(detail) or is_binary(detail) -> true
+      _other -> malformed(note)
+    end
+  end
+
+  defp note?(note), do: malformed(note)
+
+  defp malformed(note) do
+    Strict.violation!(
+      "Builder.Events.component_notes/1",
+      "builder:component:notes answered the note #{inspect(note)}, expected " <>
+        "%{severity: :warning | :note, message: String.t(), detail: String.t() | nil}"
+    )
+
+    false
   end
 
   @doc "A component's examples, before the wizard shows them."

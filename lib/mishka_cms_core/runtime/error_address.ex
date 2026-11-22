@@ -25,6 +25,13 @@ defmodule MishkaCmsCore.Runtime.ErrorAddress do
   error page" stops being a convention nobody enforced and becomes the shape of the table. `find/1`
   is how the admin asks for the one that is already there instead of offering to make another.
 
+  ## Nothing else is served there
+
+  A page and a layout share the routing table with the error pages, so one saved at such an address
+  would take it. `reserved?/1` names them, and `MishkaCmsCore.Runtime.Resources.Validations.PathFormat`
+  refuses them to everything but an error page. A renamed site's error page moves to the new address
+  with the rest of its runtime (`MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker`).
+
   ## Why the site is read rather than passed
 
   Because the callers have different halves of it. A tenant create knows the site id and nothing
@@ -48,6 +55,18 @@ defmodule MishkaCmsCore.Runtime.ErrorAddress do
   """
   @spec path(String.t()) :: String.t()
   def path(site_name) when is_binary(site_name), do: @prefix <> site_name
+
+  @doc """
+  Whether `path` is an address some site's error pages answer at.
+
+      iex> MishkaCmsCore.Runtime.ErrorAddress.reserved?("/mishka-cms/errors/localhost")
+      true
+
+      iex> MishkaCmsCore.Runtime.ErrorAddress.reserved?("/mishka-cms/errors")
+      false
+  """
+  @spec reserved?(String.t()) :: boolean()
+  def reserved?(path) when is_binary(path), do: String.starts_with?(path, @prefix)
 
   @doc """
   The address for a site id, or `nil` when the site cannot be read.

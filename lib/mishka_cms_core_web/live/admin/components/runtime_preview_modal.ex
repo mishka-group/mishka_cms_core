@@ -1420,8 +1420,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp preview_error_statuses(nil), do: []
   defp preview_error_statuses(record), do: RuntimePreview.error_statuses(record)
 
-  # The Error-code badges follow the active source: the selected draft on the Draft view (its codes
-  # may differ from the live record), the live record on Original.
+  # The Error-code badges follow the active source: the unsaved edit the Code tab drew or the selected
+  # draft on the Draft view (their codes may differ from the live record), the live record on Original.
+  defp active_error_record(%{
+         resource: ErrorPage,
+         preview_source: "draft",
+         edit_html: html,
+         edit_source: source
+       })
+       when is_binary(html),
+       do: %{error_pages: RuntimePreview.parse_error_pages(source)}
+
   defp active_error_record(%{preview_source: "draft", draft: draft}) when not is_nil(draft),
     do: draft
 
@@ -1576,6 +1585,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     do: gettext("Redrawn when something it reads changes")
 
   defp status_name(:offline), do: gettext("Offline")
+  defp status_name(:default), do: gettext("Default")
   defp status_name(status), do: to_string(status)
 
   # The setting that turns the render clock on (`MishkaCmsCore.Runtime.RenderMetrics.on?/0`).

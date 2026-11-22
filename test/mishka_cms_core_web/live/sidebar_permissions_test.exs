@@ -317,6 +317,48 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
                ["true"]
     end
 
+    test "the top row holding the open page is highlighted with its arrow, and only then", %{
+      user: user
+    } do
+      tree = "#admin-sidebar-tree"
+      shop_row = "#{tree} #sb-plugins > div > div"
+
+      open_html = sidebar(user, @shop <> "/orders-drafts")
+      assert lit?(open_html, "#{tree} a[href='#{@shop}']")
+      assert open_html |> attr(shop_row, "class") |> hd() =~ "bg-[#f2f1fc]"
+
+      assert open_html
+             |> attr("#{tree} button[aria-controls='sbi-nested']", "class")
+             |> hd() =~ "text-[#4f4bcc]"
+
+      # The row between the top one and the page is bold, not filled.
+      refute lit?(open_html, "#{tree} a[href='#{@shop}/orders']")
+
+      closed_html = sidebar(user, "/admin/dashboard/runtime/pages")
+      refute lit?(closed_html, "#{tree} a[href='#{@shop}']")
+      refute closed_html |> attr(shop_row, "class") |> hd() =~ "bg-[#f2f1fc]"
+    end
+
+    test "every nested row leads with a dot, filled on the open page and above it", %{user: user} do
+      html = sidebar(user, @shop <> "/orders-drafts")
+      tree = "#admin-sidebar-tree"
+
+      nested_links = html |> LazyHTML.query("#{tree} #sbi-nested a") |> Enum.to_list()
+      assert length(nested_links) == 15
+      assert Enum.all?(nested_links, &(&1 |> LazyHTML.query("[data-dot]") |> Enum.count() == 1))
+
+      assert dot(html, "#{tree} a[href='#{@shop}/orders-drafts']") =~ "bg-[#5b57d6]"
+      assert dot(html, "#{tree} a[href='#{@shop}/orders']") =~ "bg-[#5b57d6]"
+      assert dot(html, "#{tree} a[href='#{@shop}/inbox']") =~ "bg-[#cfcdc6]"
+
+      # A top row keeps its icon and has no dot.
+      assert html |> LazyHTML.query("#{tree} a[href='#{@shop}'] [data-dot]") |> Enum.empty?()
+    end
+
+    defp lit?(html, link), do: html |> attr(link, "class") |> hd() =~ "bg-[#f2f1fc]"
+
+    defp dot(html, link), do: html |> attr("#{link} [data-dot]", "class") |> hd()
+
     test "a page not in the nav keeps the entry it names marked", %{user: user} do
       html = sidebar(user, @shop <> "/order")
 
@@ -324,13 +366,21 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
                [@shop <> "/orders"]
     end
 
-    test "every group can fold, shows how many entries it holds, and the open page's group is open",
+    test "every group can fold, shows how many entries it holds, and only the open page's group is open",
          %{user: user} do
       html = sidebar(user, @shop <> "/inbox")
 
       for key <- ~w(runtime account plugins) do
         assert attr(html, "button[aria-controls='sb-#{key}']", "data-fold") == [""]
-        refute hidden?(html, "sb-#{key}")
+      end
+
+      # The shop's page is under Plugins: that group starts open, the others folded.
+      refute hidden?(html, "sb-plugins")
+      assert attr(html, "button[aria-controls='sb-plugins']", "aria-expanded") == ["true"]
+
+      for key <- ~w(runtime account) do
+        assert hidden?(html, "sb-#{key}")
+        assert attr(html, "button[aria-controls='sb-#{key}']", "aria-expanded") == ["false"]
       end
 
       assert html

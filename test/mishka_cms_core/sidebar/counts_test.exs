@@ -72,4 +72,48 @@ defmodule MishkaCmsCore.Sidebar.CountsTest do
 
     assert %{^key => {_token, {:sidebar_count, ^key, 2, :plain}}} = settled()
   end
+
+  describe "a number for each site" do
+    test "a viewer of a site reads that site's number, never another's", %{key: key} do
+      :ok = Counts.put(key, 4, :plain, "site-a")
+      :ok = Counts.put(key, 9, :attention, "site-b")
+
+      assert Counts.for_viewer("site-a")[key] == {4, :plain}
+      assert Counts.for_viewer("site-b")[key] == {9, :attention}
+      refute Map.has_key?(Counts.for_viewer("site-c"), key)
+    end
+
+    test "a viewer with no site reads the sum, in the warning tone when any site is", %{key: key} do
+      :ok = Counts.put(key, 4, :plain, "site-a")
+      :ok = Counts.put(key, 9, :attention, "site-b")
+
+      assert Counts.for_viewer(nil)[key] == {13, :attention}
+      assert Counts.all()[key] == {13, :attention}
+    end
+
+    test "a number set without a site is every viewer's until a site has its own", %{key: key} do
+      :ok = Counts.put(key, 2)
+      assert Counts.for_viewer("site-a")[key] == {2, :plain}
+      assert Counts.for_viewer(nil)[key] == {2, :plain}
+
+      :ok = Counts.put(key, 5, :plain, "site-a")
+      assert Counts.for_viewer("site-a")[key] == {5, :plain}
+      assert Counts.for_viewer("site-b")[key] == {2, :plain}
+    end
+
+    test "the open pages hear a site's change, and one site's change does not hold another's",
+         %{key: key} do
+      :ok = Counts.put(key, 1, :plain, "site-a")
+      :ok = Counts.put(key, 2, :plain, "site-b")
+      :ok = Counts.put(key, 3, :plain, "site-a")
+      settled()
+
+      assert_received {:sidebar_count, ^key, 1, :plain, "site-a"}
+      assert_received {:sidebar_count, ^key, 2, :plain, "site-b"}
+      refute_received {:sidebar_count, ^key, 3, :plain, "site-a"}
+
+      end_second({key, "site-a"})
+      assert_received {:sidebar_count, ^key, 3, :plain, "site-a"}
+    end
+  end
 end

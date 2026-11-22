@@ -353,6 +353,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # refused stylesheet raises nothing. Read through `[]`, so a conn that somehow missed the plug
   # renders unstyled rather than raising on the error page itself.
   #
+  # THE VISITOR'S THEME IS SET AS THE APP'S ROOT LAYOUT SETS IT, before the body is drawn. An error
+  # raised before there was a nonce has no policy either, and an empty nonce runs.
+  #
   # Note `<%= %>` INSIDE the quotes: a root layout is compiled with classic EEx, so HEEx's
   # `href={...}` would be emitted to the page literally.
   @error_root_layout ~S"""
@@ -374,6 +377,12 @@ defmodule MishkaCmsCore.Install.StarterContent do
           </style>
         <% end %>
       <% end %>
+      <script nonce="<%= @conn.assigns[:csp_nonce] %>">
+        (() => {
+          const theme = localStorage.getItem("phx:theme");
+          if (theme) document.documentElement.setAttribute("data-theme", theme);
+        })();
+      </script>
     </head>
     <body class="antialiased">
       <%= @inner_content %>
@@ -1233,7 +1242,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
                   href="https://mishka.tools/cms"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="text-brand hover:text-brand-deep"
+                  class="text-brand hover:text-brand-deep dark:text-brand-dark dark:hover:text-fg-dark"
                 >Mishka CMS</.link>
                 · open source
               </span>
@@ -1966,16 +1975,16 @@ defmodule MishkaCmsCore.Install.StarterContent do
       status: status,
       layout: %{
         template:
-          ~s|<div class="flex min-h-dvh items-center justify-center bg-ground font-sans p-6"><%= @inner_content %></div>|
+          ~s|<div class="flex min-h-dvh items-center justify-center bg-ground font-sans p-6 dark:bg-page-dark"><%= @inner_content %></div>|
       },
       template: ~s"""
-      <div class="w-full max-w-[520px] rounded-[18px] border border-[#ecebe6] bg-white p-10 text-center">
-        <p class="font-display text-[46px] font-bold tracking-[-0.03em] text-[#1b1a18]">#{status}</p>
-        <h1 class="mt-2 font-display text-[20px] font-bold tracking-[-0.02em] text-[#1b1a18]">#{title}</h1>
-        <p class="mt-3 text-[13.5px] text-[#57544d]">
+      <div class="w-full max-w-[520px] rounded-[18px] border border-[#ecebe6] bg-white p-10 text-center dark:border-edge-dark dark:bg-surface-dark">
+        <p class="font-display text-[46px] font-bold tracking-[-0.03em] text-[#1b1a18] dark:text-fg-dark">#{status}</p>
+        <h1 class="mt-2 font-display text-[20px] font-bold tracking-[-0.02em] text-[#1b1a18] dark:text-fg-dark">#{title}</h1>
+        <p class="mt-3 text-[13.5px] text-[#57544d] dark:text-dim-dark">
           #{error_body(status)}
         </p>
-        <a href={site_path("/:lang", @conn.assigns[:site_language])} class="mt-7 inline-block rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white">
+        <a href={site_path("/:lang", @conn.assigns[:site_language])} class="mt-7 inline-flex min-h-11 items-center rounded-[9px] bg-[#17161a] px-4 text-[12px] font-bold text-white dark:bg-fg-dark dark:text-page-dark">
           Back home
         </a>
       </div>
@@ -1992,15 +2001,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
       status: :offline,
       layout: %{
         template:
-          ~s|<div class="flex min-h-dvh items-center justify-center bg-ground font-sans p-6"><%= @inner_content %></div>|
+          ~s|<div class="flex min-h-dvh items-center justify-center bg-ground font-sans p-6 dark:bg-page-dark"><%= @inner_content %></div>|
       },
       template: ~s"""
-      <div class="w-full max-w-[520px] rounded-[18px] border border-[#ecebe6] bg-white p-10 text-center">
-        <h1 class="font-display text-[26px] font-bold tracking-[-0.02em] text-[#1b1a18]">Down for maintenance</h1>
-        <p class="mt-3 text-[13.5px] text-[#57544d]">
+      <div class="w-full max-w-[520px] rounded-[18px] border border-[#ecebe6] bg-white p-10 text-center dark:border-edge-dark dark:bg-surface-dark">
+        <h1 class="font-display text-[26px] font-bold tracking-[-0.02em] text-[#1b1a18] dark:text-fg-dark">Down for maintenance</h1>
+        <p class="mt-3 text-[13.5px] text-[#57544d] dark:text-dim-dark">
           We are making some changes to this site. Please check back soon.
         </p>
-        <a href={site_path("/:lang/auth", @conn.assigns[:site_language]) <> "?master_user=false"} class="mt-7 inline-block rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white">
+        <a href={site_path("/:lang/auth", @conn.assigns[:site_language]) <> "?master_user=false"} class="mt-7 inline-flex min-h-11 items-center rounded-[9px] bg-[#17161a] px-4 text-[12px] font-bold text-white dark:bg-fg-dark dark:text-page-dark">
           Administrator sign in
         </a>
       </div>

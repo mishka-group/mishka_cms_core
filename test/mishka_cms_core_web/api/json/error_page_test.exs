@@ -137,6 +137,39 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
   end
 
   describe "MASTER ADMIN - CREATE" do
+    test "an entry's status is a code, offline or default, and reads back as it was sent", %{
+      master_user: master_user,
+      site: site
+    } do
+      response =
+        make_api_request(
+          @master_path,
+          %{
+            "type" => "error_page",
+            "attributes" => %{
+              "name" => "Site1 Error Pages",
+              "path" => "/errors/*",
+              "error_pages" =>
+                for(
+                  status <- [404, "offline", "default"],
+                  do: %{"status" => status, "template" => "<h1>Sorry</h1>"}
+                ),
+              "site_id" => site.id
+            }
+          },
+          method: :post,
+          headers: [
+            {"authorization", "Bearer #{sign_in_master(master_user)}"},
+            {"x-no-tenant", "true"},
+            {"content-type", "application/vnd.api+json"}
+          ]
+        )
+
+      assert response.status == 201
+      entries = Jason.decode!(response.resp_body)["data"]["attributes"]["error_pages"]
+      assert Enum.map(entries, & &1["status"]) == [404, "offline", "default"]
+    end
+
     test "master can create error page for site1", %{master_user: master_user, site: site} do
       token = sign_in_master(master_user)
 

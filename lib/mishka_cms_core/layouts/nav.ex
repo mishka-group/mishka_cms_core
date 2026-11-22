@@ -6,8 +6,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   @moduledoc """
   `on_mount` hook that records, for the admin chrome in `MishkaCmsCore.Layouts`: the current request
   path as `@current_path` (so the sidebar highlights the active item — updates on live navigation
-  too), `@notification_count` (failed/retrying runtime jobs, shown as the topbar bell badge), and
-  `@current_user` with its `:permissions` loaded. Attached to every admin page via
+  too) and `@current_user` with its `:permissions` loaded. Attached to every admin page via
   `MishkaCmsCore.ExtensionLiveView`.
 
   It also puts the page in the language its admin reads the dashboard in —
@@ -16,7 +15,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   out is the site's sign-out page in the language its admin reads the site in, `@sign_out_path`
   (`MishkaCmsCore.Runtime.Plugs.SiteLookupPlug.auth_address/3`). And it names the page's
   `@footer_credit`: the name and address of the extension that owns the page, or `nil` on the core's
-  own (`MishkaCmsCore.Sidebar.credit/1`).
+  own (`MishkaCmsCore.Sidebar.credit/1`); `@footer_shown` is `false` for an extension that draws no such line (`MishkaCmsCore.Sidebar.footer?/1`).
 
   The sidebar follows its settings live: the hook subscribes to `MishkaCmsCore.Sidebar.changed/1` for
   the menu its viewer is shown and raises `@sidebar_version`, which `MishkaCmsCore.Layouts.sidebar/1`
@@ -25,8 +24,36 @@ defmodule MishkaCmsCore.Layouts.Nav do
   with the new `version` as its measurement and the page's `view` as its metadata, so whatever asks
   the page after that event is answered with the redrawn sidebar.
 
-  It keeps `@sidebar_counts`, the numbers entries show (`MishkaCmsCore.Sidebar.Counts`): read from
-  memory when the page mounts, then changed by each count the page hears.
+  It keeps `@sidebar_counts`, the numbers entries show (`MishkaCmsCore.Sidebar.Counts`) for the
+  viewer's site (`Counts.for_viewer/1`, a master with no site reads the sum): read from memory when
+  the page opens, then read again on each count the page hears.
+
+  It keeps `@topbar_items`, what extensions add to the top bar on the `"topbar:items"` event
+  (`MishkaCmsCore.Layouts.TopbarItems`): collected when the page opens and again only when its path
+  changes, so a patch that keeps the path, and every render, calls no plugin. `@topbar_site` is the
+  site the request resolved to, handed to those items. `@topbar_section` is the page's heading on a
+  phone (`MishkaCmsCore.Sidebar.section/1`), read with them.
+
+  `@topbar_placeholder` is the search box's placeholder an extension gave on the `"topbar:search"`
+  event (`MishkaCmsCore.Layouts.TopbarSearch.placeholder/1`), read with them.
+
+  It keeps `@topbar_bands`, what extensions draw full width under the top bar on the `"topbar:bands"`
+  event (`MishkaCmsCore.Layouts.TopbarBands`), collected with the items, and `@topbar_status`, the
+  status lines of the top bar's chip on `"topbar:status"` (`MishkaCmsCore.Layouts.TopbarStatus`).
+
+  It keeps `@sidebar_status`, the lines of the sidebar's status card on the `"sidebar:status"` event
+  (`MishkaCmsCore.Layouts.SidebarStatus`), and `@sidebar_status_card`, the card made of them on the
+  `"sidebar:status:card"` event, both collected with the top bar's items and again when a part calls `SidebarStatus.changed/1` for the viewer's site; the changes that
+  arrive together are collected once, and each collection emits
+  `[:mishka_cms, :sidebar_status, :refreshed]` from the page's own process. `@sidebar_status_now` is
+  the time the card counts "Checked 1 min ago" to: set with each collection and moved on once a
+  minute while the card says all is well, which reads nothing.
+
+  It keeps `@topbar_needs`, the bell's "What needs you" items on the `"topbar:needs"` event
+  (`MishkaCmsCore.Layouts.TopbarNeeds`), collected with the top bar's items and again when an
+  extension calls `TopbarNeeds.changed/1` for the viewer's site. The changes that arrive together
+  are collected once, and each collection emits `[:mishka_cms, :topbar_needs, :refreshed]` from the
+  page's own process. The bell's unread notifications are `MishkaCmsCore.Notify.LiveHooks`'s.
 
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
@@ -34,15 +61,21 @@ defmodule MishkaCmsCore.Layouts.Nav do
   """
   import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
   import Phoenix.Component, only: [assign: 2, assign: 3]
-  import Ecto.Query
 
+  alias MishkaCmsCore.Layouts.{TopbarBands, TopbarItems, TopbarNeeds, TopbarSearch}
+  alias MishkaCmsCore.Layouts.{SidebarStatus, TopbarStatus}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsCore.Sidebar.Counts
 
   @sidebar_refresh_ms 50
+  @needs_refresh_ms 50
   @redrawn [:mishka_cms, :sidebar, :redrawn]
+  @needs_refreshed [:mishka_cms, :topbar_needs, :refreshed]
+  @status_refresh_ms 50
+  @status_refreshed [:mishka_cms, :sidebar_status, :refreshed]
+  @status_tick_ms 60_000
 
   def on_mount(:default, _params, session, socket) do
     language = Languages.admin(session)
@@ -63,7 +96,6 @@ defmodule MishkaCmsCore.Layouts.Nav do
       # field to a form silently gives you a plain textarea and no clue why. `content_editor` does
       # the same for the rich-text editor's bundle, which `assets/js/pb_content_editor.js` reads.
       |> assign(
-        notification_count: notification_count(),
         admin_css: true,
         admin_fonts: true,
         code_editor: true,
@@ -82,19 +114,163 @@ defmodule MishkaCmsCore.Layouts.Nav do
         admin_languages: Languages.admin_choices(site_id(session)),
         sign_out_path:
           SiteLookupPlug.auth_address(session[Languages.session()], site_id(session), "/sign-out"),
-        footer_credit: Sidebar.credit(socket.view)
+        footer_credit: Sidebar.credit(socket.view),
+        footer_shown: Sidebar.footer?(socket.view)
       )
+
+    site = session["current_site"]
 
     {:cont,
      socket
      |> attach_hook(:current_path, :handle_params, fn _params, uri, socket ->
-       {:cont, assign(socket, :current_path, URI.parse(uri).path)}
+       {:cont, at_path(socket, URI.parse(uri).path, site)}
      end)
-     |> follow_sidebar()}
+     |> follow_sidebar()
+     |> follow_needs()
+     |> follow_status()}
   end
 
+  defp at_path(%{assigns: %{current_path: path, topbar_items: _items}} = socket, path, _site),
+    do: socket
+
+  defp at_path(socket, path, site) do
+    context = %{
+      current_user: socket.assigns[:current_user],
+      current_site: site,
+      current_path: path,
+      view: socket.view
+    }
+
+    status = SidebarStatus.collect(context)
+
+    assign(socket,
+      current_path: path,
+      topbar_items: TopbarItems.collect(context),
+      topbar_bands: TopbarBands.collect(context),
+      topbar_status: TopbarStatus.collect(context),
+      topbar_placeholder: TopbarSearch.placeholder(context),
+      topbar_needs: TopbarNeeds.collect(context),
+      sidebar_status: status,
+      sidebar_status_card: SidebarStatus.card(status, context),
+      sidebar_status_now: DateTime.utc_now(),
+      topbar_site: site,
+      topbar_section: Sidebar.section(path),
+      sidebar_counts: viewer_counts(socket)
+    )
+  end
+
+  defp follow_needs(socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, TopbarNeeds.topic())
+      attach_hook(socket, :topbar_needs, :handle_info, &needs_message/2)
+    else
+      socket
+    end
+  end
+
+  defp needs_message({:topbar_needs_changed, site_id}, socket) do
+    cond do
+      not TopbarNeeds.concerns?(socket.assigns[:current_user], site_id) ->
+        {:halt, socket}
+
+      socket.private[:needs_refresh_pending] ->
+        {:halt, socket}
+
+      true ->
+        Process.send_after(self(), :topbar_needs_refresh, @needs_refresh_ms)
+        {:halt, put_private(socket, :needs_refresh_pending, true)}
+    end
+  end
+
+  defp needs_message(:topbar_needs_refresh, socket) do
+    needs =
+      TopbarNeeds.collect(%{
+        current_user: socket.assigns[:current_user],
+        current_site: socket.assigns[:topbar_site],
+        current_path: socket.assigns[:current_path],
+        view: socket.view
+      })
+
+    :telemetry.execute(@needs_refreshed, %{total: TopbarNeeds.total(needs)}, %{view: socket.view})
+
+    new_socket =
+      socket
+      |> put_private(:needs_refresh_pending, false)
+      |> assign(:topbar_needs, needs)
+
+    {:halt, new_socket}
+  end
+
+  defp needs_message(_message, socket), do: {:cont, socket}
+
+  defp follow_status(socket) do
+    if connected?(socket) and SidebarStatus.enabled?() do
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, SidebarStatus.topic())
+      Process.send_after(self(), :sidebar_status_tick, @status_tick_ms)
+      attach_hook(socket, :sidebar_status, :handle_info, &status_message/2)
+    else
+      socket
+    end
+  end
+
+  defp status_message({:sidebar_status_changed, site_id}, socket) do
+    cond do
+      not SidebarStatus.concerns?(socket.assigns[:current_user], site_id) ->
+        {:halt, socket}
+
+      socket.private[:status_refresh_pending] ->
+        {:halt, socket}
+
+      true ->
+        Process.send_after(self(), :sidebar_status_refresh, @status_refresh_ms)
+        {:halt, put_private(socket, :status_refresh_pending, true)}
+    end
+  end
+
+  defp status_message(:sidebar_status_refresh, socket) do
+    context = %{
+      current_user: socket.assigns[:current_user],
+      current_site: socket.assigns[:topbar_site],
+      current_path: socket.assigns[:current_path],
+      view: socket.view
+    }
+
+    lines = SidebarStatus.collect(context)
+
+    :telemetry.execute(@status_refreshed, %{lines: length(lines)}, %{view: socket.view})
+
+    new_socket =
+      socket
+      |> put_private(:status_refresh_pending, false)
+      |> assign(
+        sidebar_status: lines,
+        sidebar_status_card: SidebarStatus.card(lines, context),
+        sidebar_status_now: DateTime.utc_now()
+      )
+
+    {:halt, new_socket}
+  end
+
+  defp status_message(:sidebar_status_tick, socket) do
+    Process.send_after(self(), :sidebar_status_tick, @status_tick_ms)
+
+    case socket.assigns[:sidebar_status] do
+      [%{level: :ok}] -> {:halt, assign(socket, :sidebar_status_now, DateTime.utc_now())}
+      _other -> {:halt, socket}
+    end
+  end
+
+  defp status_message(_message, socket), do: {:cont, socket}
+
+  # The numbers of the viewer's own site. Read when the path changes, after every `on_mount` of the
+  # page has run, so a page that scopes its user to a site (an extension's) is read as that site.
+  defp viewer_counts(socket), do: Counts.for_viewer(site_of(socket.assigns[:current_user]))
+
+  defp site_of(%{site_id: site_id}) when is_binary(site_id), do: site_id
+  defp site_of(_user), do: nil
+
   defp follow_sidebar(socket) do
-    socket = assign(socket, sidebar_version: 0, sidebar_counts: Counts.all())
+    socket = assign(socket, sidebar_version: 0, sidebar_counts: viewer_counts(socket))
 
     if connected?(socket) do
       Sidebar.subscribe(socket.assigns[:current_user])
@@ -124,9 +300,9 @@ defmodule MishkaCmsCore.Layouts.Nav do
      |> assign(:sidebar_version, version)}
   end
 
-  defp sidebar_message({:sidebar_count, key, number, tone}, socket) do
-    {:halt,
-     assign(socket, :sidebar_counts, Map.put(socket.assigns.sidebar_counts, key, {number, tone}))}
+  defp sidebar_message(message, socket)
+       when elem(message, 0) == :sidebar_count and tuple_size(message) in [4, 5] do
+    {:halt, assign(socket, :sidebar_counts, viewer_counts(socket))}
   end
 
   defp sidebar_message(_message, socket), do: {:cont, socket}
@@ -140,10 +316,5 @@ defmodule MishkaCmsCore.Layouts.Nav do
     if Ash.Resource.loaded?(user, :permissions),
       do: user,
       else: Ash.load!(user, [permissions: [:name]], actor: user)
-  end
-
-  defp notification_count do
-    query = from(j in Oban.Job, where: j.state in ["retryable", "discarded"], select: count())
-    Oban.Repo.one(Oban.config(), query) || 0
   end
 end

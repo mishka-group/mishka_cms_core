@@ -380,16 +380,20 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
   # draws that page inside a plug, where a raise is a bare 500 on every request. So it is drawn once
   # here, as a visitor gets it, and a failure is kept in `CompileFailureState` under
   # `{module, :offline}`: `MishkaCmsWeb.ErrorHTML.offline_page/1` reads it and hands the visitor the
-  # built-in page instead. The module stays loaded, so its 404 and 500 still work.
+  # built-in page instead. The module stays loaded, so its 404 and 500 still work. What was kept of the
+  # module compiled before it, for this entry and the others, is forgotten once the new one was drawn,
+  # so an entry that fails again is not taken for one that draws meanwhile.
   #
   # By the caller that started the compile, once its worker has ended and given back its slot: the
   # page may name a component that is not built yet, and building it takes a slot of its own.
   defp check_offline_page({:ok, module}) do
-    cond do
-      not function_exported?(module, :__error_information__, 1) -> :ok
-      not ErrorCompiler.offline_entry?(module) -> CompileFailureState.clear({module, :offline})
-      true -> module |> draw_offline_page() |> offline_page_drawn(module)
+    if function_exported?(module, :__error_information__, 1) do
+      drawn = if ErrorCompiler.offline_entry?(module), do: draw_offline_page(module), else: :ok
+      CompileFailureState.clear_matching({module, :_})
+      offline_page_drawn(drawn, module)
     end
+
+    :ok
   end
 
   defp check_offline_page(_not_compiled), do: :ok
@@ -409,7 +413,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
     kind, value -> {:error, "#{kind}: #{inspect(value)}"}
   end
 
-  defp offline_page_drawn(:ok, module), do: CompileFailureState.clear({module, :offline})
+  defp offline_page_drawn(:ok, _module), do: :ok
 
   defp offline_page_drawn({:error, reason}, module) do
     CompileFailureState.record({module, :offline}, reason)

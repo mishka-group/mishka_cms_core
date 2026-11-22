@@ -73,6 +73,16 @@ defmodule MishkaCmsCoreWeb.Test.AdminLanguageTest do
   defp choose(conn, params), do: put(conn, "/admin/language", params)
 
   describe "the user menu" do
+    test "the account chip is the avatar and the email, with no chevron, and still opens the menu",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, @home)
+
+      assert has_element?(view, "#topbar-user-button [data-role='user-email']")
+      refute has_element?(view, "#topbar-user-button .hero-chevron-down")
+      assert has_element?(view, "#topbar-user-button[phx-click*='topbar-user']")
+      assert has_element?(view, "#topbar-user a[href='/auth/sign-out']")
+    end
+
     test "offers the site's languages and English, with English chosen until one is", %{
       conn: conn
     } do

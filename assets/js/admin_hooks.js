@@ -230,11 +230,18 @@ const NumberBounds = {
 //
 // It also keeps what the reader folded. A group or a branch folds with `Phoenix.LiveView.JS`, but
 // `JS` cannot write storage, so the hook remembers each fold in `localStorage` (one map of panel id
-// to open, for every tab and the next visit) and puts it back on the fresh nav. A panel that holds
+// to open, for every tab and the next visit) and puts it back on the fresh nav. Only a menu section
+// (Runtime, Account, Plugins) is remembered: a branch under an entry (`sbi-...`) is closed on every
+// load unless it holds the open page, and opens only when the admin clicks it. A panel that holds
 // the open page stays open whatever was remembered. The fold is put back through `this.js()`, so a
 // later patch of the sidebar keeps it, as it keeps one made by a click.
 const SIDEBAR_SCROLL_KEY = "admin-sidebar:scrollTop";
 const SIDEBAR_FOLDS_KEY = "admin-sidebar:folds";
+
+// A branch under an entry is never remembered; only a section of the menu is.
+function remembered(id) {
+  return !id.startsWith("sbi-");
+}
 
 function readFolds() {
   try {
@@ -245,6 +252,47 @@ function readFolds() {
     // Refused storage or a value that is not JSON: nothing is remembered.
     return {};
   }
+}
+
+// LiveView runs the fold from its own click listener on `window`, after this one, so the state the
+// click leads to is the opposite of the one read here.
+function rememberFold(event) {
+  const button = event.target.closest?.("[data-fold]");
+  const id = button?.getAttribute("aria-controls");
+
+  if (!id || !remembered(id)) return;
+
+  const folds = readFolds();
+  folds[id] = button.getAttribute("aria-expanded") !== "true";
+
+  try {
+    localStorage.setItem(SIDEBAR_FOLDS_KEY, JSON.stringify(folds));
+  } catch (_denied) {
+    // Without storage the fold lasts until the panel is drawn again.
+  }
+}
+
+// Puts each remembered fold under `el` back, through the hook's `js` so a later patch keeps it. A
+// panel holding the open page stays open.
+function restoreFolds(el, js) {
+  const folds = readFolds();
+
+  el.querySelectorAll("[data-fold]").forEach((button) => {
+    const id = button.getAttribute("aria-controls");
+    const panel = id && document.getElementById(id);
+
+    if (!panel || !remembered(id) || typeof folds[id] !== "boolean") return;
+
+    const open = folds[id] || panel.querySelector("[aria-current='page']") !== null;
+
+    js.setAttribute(button, "aria-expanded", String(open));
+
+    if (open) {
+      js.removeClass(panel, "hidden");
+    } else {
+      js.addClass(panel, "hidden");
+    }
+  });
 }
 
 // A link hidden by its own list (or by the wide or narrow half of the nav) has no box to scroll to.
@@ -262,7 +310,7 @@ const SidebarScroll = {
       // Private browsing may refuse sessionStorage; fall back to the active link below.
     }
 
-    this.restoreFolds();
+    restoreFolds(this.el, this.js());
 
     const top = saved === null ? NaN : parseInt(saved, 10);
 
@@ -290,53 +338,27 @@ const SidebarScroll = {
       });
     };
 
-    // LiveView runs the fold from its own click listener on `window`, after this one, so the state
-    // the click leads to is the opposite of the one read here.
-    this.onFold = (event) => {
-      const button = event.target.closest?.("[data-fold]");
-      const id = button?.getAttribute("aria-controls");
-
-      if (!id) return;
-
-      const folds = readFolds();
-      folds[id] = button.getAttribute("aria-expanded") !== "true";
-
-      try {
-        localStorage.setItem(SIDEBAR_FOLDS_KEY, JSON.stringify(folds));
-      } catch (_denied) {
-        // Without storage the fold lasts until the nav is drawn again.
-      }
-    };
-
     this.el.addEventListener("scroll", this.onScroll, { passive: true });
-    this.el.addEventListener("click", this.onFold);
-  },
-  restoreFolds() {
-    const folds = readFolds();
-    const js = this.js();
-
-    this.el.querySelectorAll("[data-fold]").forEach((button) => {
-      const id = button.getAttribute("aria-controls");
-      const panel = id && document.getElementById(id);
-
-      if (!panel || typeof folds[id] !== "boolean") return;
-
-      const open = folds[id] || panel.querySelector("[aria-current='page']") !== null;
-
-      js.setAttribute(button, "aria-expanded", String(open));
-
-      if (open) {
-        js.removeClass(panel, "hidden");
-      } else {
-        js.addClass(panel, "hidden");
-      }
-    });
+    this.el.addEventListener("click", rememberFold);
   },
   destroyed() {
     this.el.removeEventListener("scroll", this.onScroll);
-    this.el.removeEventListener("click", this.onFold);
+    this.el.removeEventListener("click", rememberFold);
 
     if (this.frame !== null) cancelAnimationFrame(this.frame);
+  },
+};
+
+// The bell's "What needs you" groups (`MishkaCmsCore.Layouts.TopbarNeeds`): a group folds with
+// `Phoenix.LiveView.JS`, and this keeps the fold as `SidebarScroll` keeps the sidebar's, in the same
+// `localStorage` map, so a group folded on one page stays folded on the next and on the next visit.
+const RememberFolds = {
+  mounted() {
+    restoreFolds(this.el, this.js());
+    this.el.addEventListener("click", rememberFold);
+  },
+  destroyed() {
+    this.el.removeEventListener("click", rememberFold);
   },
 };
 
@@ -378,6 +400,7 @@ export default {
   PreviewFrame,
   NumberBounds,
   SidebarScroll,
+  RememberFolds,
   MediaThumb,
   DashboardGrid,
   DashboardTray,

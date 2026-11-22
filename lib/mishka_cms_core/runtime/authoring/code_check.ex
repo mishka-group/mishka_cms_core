@@ -4,8 +4,8 @@
 
 defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   @moduledoc """
-  Compiles a page's code without loading it, so an author is told about a mistake instead of a
-  visitor being shown one.
+  Compiles a page's code, or an Error Page's, without loading it, so an author is told about a
+  mistake instead of a visitor being shown one.
 
   ## Why this has to exist
 
@@ -38,7 +38,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
 
   Compiling a page means expanding `use MishkaCmsWeb, :live_view`, which is about a second of work,
   so the budget is generous: it is here to catch a macro that never returns, not to police a busy
-  machine. Checks do not wait for each other — each compiles under a name of its own — so the
+  machine. Checks do not wait for each other — each compiles under a name no other holds — so the
   deadline only ever covers one compile.
 
   ## Fidelity
@@ -59,7 +59,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Compilers.ErrorCompiler
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+  alias MishkaCmsCore.Runtime.ErrorStatus
 
   # GENEROUS ON PURPOSE. Compiling a page means expanding `use MishkaCmsWeb, :live_view`, which is
   # about a second of work on a warm machine and more on a cold or busy one. The budget is here to
@@ -85,6 +87,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
           required(:message) => String.t()
         }
 
+  @typedoc "Where an Error Page's fault is: an entry, or what all of them compile with."
+  @type error_page_part ::
+          {:status, ErrorStatus.t()} | :error_pages | :root_layout_template | :helpers
+
   @doc """
   Checks one page's code.
 
@@ -102,6 +108,32 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     case fragment_faults(params) do
       [] -> module_faults(params)
       faults -> {:error, faults}
+    end
+  end
+
+  @doc """
+  Checks one Error Page's code: its `:error_pages` with their layouts, its `:root_layout_template` and
+  its `:helpers`, compiled into one module by `ErrorCompiler`'s own stages, as `check/1` compiles a
+  page.
+
+  The fault comes with where it is: the status of the entry, `:root_layout_template` or `:helpers`,
+  and `:error_pages` when no part fails on its own or the compile took too long. Code that compiles
+  costs one compile. Code that does not is compiled again in parts, to find which one it was.
+  """
+  @spec error_page(map()) :: :ok | {:error, {error_page_part(), fault()}}
+  def error_page(error_page) when is_map(error_page) do
+    params = %{
+      title: "code_check",
+      site: "code_check",
+      error_module: nil,
+      error_pages: Map.get(error_page, :error_pages) || [],
+      root_layout_template: presence(Map.get(error_page, :root_layout_template)),
+      helpers: listed(error_page, :helpers)
+    }
+
+    case params.helpers |> Enum.with_index() |> Enum.flat_map(&helper_fault/1) do
+      [] -> error_page_fault(params)
+      [fault | _rest] -> {:error, {:helpers, fault}}
     end
   end
 
@@ -207,6 +239,35 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   def ok?(page), do: check(page) == :ok
 
   @doc """
+  The fault of a template `LiveViewCompiler.draw_template/2` or `draw_html_template/2` did not draw:
+  what the compiler refuses in it, at the author's line. `nil` when it compiled and failed as it was
+  drawn, for want of an assign a live page is handed.
+  """
+  @spec drawing_fault(LiveViewCompiler.failure()) :: fault() | nil
+  def drawing_fault(%{stage: :compile, error: error}),
+    do: fault(:template, nil, nil, error_line(error), describe(error))
+
+  def drawing_fault(%{stage: :draw, error: %CompileError{} = error, diagnostics: diagnostics}),
+    do: %{compile_fault(error, diagnostics, LiveViewCompiler) | tab: :template}
+
+  def drawing_fault(%{stage: :draw}), do: nil
+
+  @doc """
+  The fault in what a compile of `module` answers when it is refused: the exception, and the
+  diagnostics that hold the sentence it does not.
+  """
+  @spec compile_fault(Exception.t(), [map()], module()) :: fault()
+  def compile_fault(error, diagnostics, module) do
+    case Enum.find(diagnostics, &(&1.severity == :error)) do
+      %{message: message} = diagnostic ->
+        fault(:page, nil, nil, diagnostic_line(diagnostic), unname(message, module))
+
+      nil ->
+        fault(:page, nil, nil, error_line(error), unname(Exception.message(error), module))
+    end
+  end
+
+  @doc """
   One line of prose for a fault, the way it should read above the box it belongs to.
   """
   @spec message(fault()) :: String.t()
@@ -225,7 +286,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   defp params(page) do
     %{
       title: "code_check",
-      page_module: candidate(),
+      page_module: nil,
       template: Map.get(page, :template) || "",
       events: listed(page, :events),
       infos: listed(page, :infos),
@@ -354,35 +415,96 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # one, and a suite that creates pages in sixteen parallel cases took twice as long and failed
   # fourteen tests on ExUnit's own timeout.
   #
-  # A unique name has neither problem and costs one atom per check. Atoms are never collected, so
-  # that is a real cost and worth stating: a site saving a hundred pages a day would take about
-  # thirty years to reach the default limit, and a restart clears it. This runtime already mints a
-  # module atom for every page, component and layout it compiles.
+  # A name made for each check has neither problem and is never given back: the atom stays, and so do
+  # the entries a module's functions leave in the VM's tables, about 6 KB a check. So the names are
+  # these, each held by the process that compiles under it and free again the moment that process
+  # ends, however it ends. A name that Elixir has not yet let go of is passed over, and a check that
+  # finds none free makes one, as every check did.
+  @candidates for number <- 1..64, do: Module.concat(__MODULE__, "C#{number}")
+  @registry MishkaCms.ModuleCompilerHandlerRegistry
+
+  defp under_name(fun) do
+    case Enum.find(@candidates, &held?/1) do
+      nil ->
+        fun.(new_candidate())
+
+      name ->
+        result = fun.(name)
+        let_go(name)
+        result
+    end
+  end
+
+  defp held?(name) do
+    with {:ok, _owner} <- Registry.register(@registry, {__MODULE__, name}, nil),
+         true <- Module.open?(name) do
+      let_go(name)
+      false
+    else
+      false -> true
+      {:error, {:already_registered, _pid}} -> false
+    end
+  end
+
+  defp let_go(name), do: Registry.unregister(@registry, {__MODULE__, name})
+
+  # A number of the VM's own, not text from a request.
   # sobelow_skip ["DOS.ModuleConcat"]
-  defp candidate,
-    do: Module.concat(__MODULE__, "C#{System.unique_integer([:positive])}")
+  defp new_candidate,
+    do: Module.concat(__MODULE__, "Check#{System.unique_integer([:positive])}")
 
   defp module_faults(params) do
-    task = Task.async(MishkaGervaz.Messages.in_caller_locale(fn -> compile(params) end))
+    case within_budget(&compile(%{params | page_module: &1})) do
+      :ok -> :ok
+      {:error, fault} -> {:error, [fault]}
+    end
+  end
+
+  defp error_page_fault(params) do
+    case within_budget(&blamed(%{params | error_module: &1})) do
+      {:error, %{} = out_of_time} -> {:error, {:error_pages, out_of_time}}
+      result -> result
+    end
+  end
+
+  defp blamed(params) do
+    with {:error, fault} <- compile_error_page(params) do
+      {:error, params |> parts() |> Enum.find_value({:error_pages, fault}, &part_fault/1)}
+    end
+  end
+
+  # What every entry compiles with first, then each entry alone.
+  defp parts(params) do
+    [
+      {:helpers, %{params | error_pages: [], root_layout_template: nil}},
+      {:root_layout_template, %{params | error_pages: []}}
+      | Enum.map(params.error_pages, &{{:status, &1.status}, %{params | error_pages: [&1]}})
+    ]
+  end
+
+  defp part_fault({part, params}) do
+    case compile_error_page(params) do
+      :ok -> nil
+      {:error, fault} -> {part, fault}
+    end
+  end
+
+  defp within_budget(fun) do
+    task = Task.async(MishkaGervaz.Messages.in_caller_locale(fn -> under_name(fun) end))
 
     case Task.yield(task, @compile_budget) || Task.shutdown(task, :brutal_kill) do
-      {:ok, :ok} ->
-        :ok
-
-      {:ok, {:error, fault}} ->
-        {:error, [fault]}
+      {:ok, result} ->
+        result
 
       _timeout ->
         {:error,
-         [
-           fault(
-             :page,
-             nil,
-             nil,
-             nil,
-             gettext("This took too long to compile. Something in it is probably looping.")
-           )
-         ]}
+         fault(
+           :page,
+           nil,
+           nil,
+           nil,
+           gettext("This took too long to compile. Something in it is probably looping.")
+         )}
     end
   end
 
@@ -395,7 +517,16 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     |> stage(:state, &LiveViewCompiler.build_page_state/1)
     |> stage(:template, &LiveViewCompiler.build_renders/1)
     |> stage(:helpers, &LiveViewCompiler.build_helpers/1)
-    |> load(params.page_module)
+    |> load(params.page_module, &LiveViewCompiler.create_module_ast/1)
+  end
+
+  defp compile_error_page(params) do
+    params
+    |> stage(:page, &ErrorCompiler.build_error_information/1)
+    |> stage(:template, &ErrorCompiler.build_layout_functions/1)
+    |> stage(:template, &ErrorCompiler.build_render_functions/1)
+    |> stage(:helpers, &ErrorCompiler.build_helpers/1)
+    |> load(params.error_module, &ErrorCompiler.create_module_ast/1)
   end
 
   defp stage({:error, _fault} = error, _tab, _fun), do: error
@@ -412,6 +543,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
        when error in [SyntaxError, TokenMissingError, MismatchedDelimiterError],
        do: description
 
+  # A block with no end reaches the tag engine's parser with no clause for it.
+  defp describe(%FunctionClauseError{}),
+    do: gettext("It could not be read. Look for a tag or a block that is not closed.")
+
   defp describe(error), do: trim_file(Exception.message(error))
 
   # The HEEx engine names the fake file it was handed, which is a compiler implementation detail
@@ -420,10 +555,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   defp trim_file(message) do
     message
     |> String.replace(~r/^mishka_cms_runtime_[a-z_]*[^:]*:\d+:\d+:\s*/, "")
-    |> String.replace(@template_file, gettext("the template"))
+    |> String.replace(~r/mishka_cms_runtime_[a-z_]*\d*/, gettext("the template"))
   end
 
-  defp load({:error, _fault} = error, _module), do: error
+  defp load({:error, _fault} = error, _module, _create_ast), do: error
 
   # `Code.compile_quoted/2` reports a semantic error as "cannot compile module … (errors have been
   # logged)" and puts the sentence the author needs on the logger instead. `with_diagnostics/1` hands
@@ -431,8 +566,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # the server console.
   # Compiling the admin's own code is what this check is for.
   # sobelow_skip ["RCE.Compile"]
-  defp load(built, module) do
-    ast = LiveViewCompiler.create_module_ast(built)
+  defp load(built, module, create_ast) do
+    ast = create_ast.(built)
     purge(module)
 
     {result, diagnostics} =
@@ -452,19 +587,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
 
   defp outcome(:ok, _diagnostics, _module), do: :ok
 
-  defp outcome({:raised, error}, diagnostics, module) do
-    case Enum.find(diagnostics, &(&1.severity == :error)) do
-      %{message: message} = diagnostic ->
-        {:error, fault(:page, nil, nil, diagnostic_line(diagnostic), unname(message, module))}
+  defp outcome({:raised, error}, diagnostics, module),
+    do: {:error, compile_fault(error, diagnostics, module)}
 
-      nil ->
-        {:error,
-         fault(:page, nil, nil, error_line(error), unname(Exception.message(error), module))}
-    end
-  end
-
-  # The rehearsal module's name is `C80201` and nothing else in the world calls the page that. It
-  # turns up in the middle of otherwise readable sentences — "expected …CodeCheck.C80201 to define
+  # The rehearsal module's name is `C2` and nothing else in the world calls the page that. It
+  # turns up in the middle of otherwise readable sentences — "expected …CodeCheck.C2 to define
   # such a function" — so it is spelled the way the author thinks of it.
   defp unname(message, module) when is_binary(message),
     do: String.replace(message, inspect(module), gettext("this code"))
@@ -479,8 +606,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # both sides of the compile: before, in case an earlier check under this name was killed by the
   # budget, and after, so nothing that was only ever a rehearsal is left loaded.
   defp purge(module) do
-    :code.purge(module)
     :code.delete(module)
+    :code.purge(module)
     :ok
   end
 

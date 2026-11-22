@@ -8,6 +8,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
   import Plug.Test
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsCore.Runtime.OriginValidator
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
@@ -158,6 +159,37 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
 
       refute result_conn.halted
       assert result_conn.assigns.current_site.id == site.id
+    end
+
+    test "reads a host in capital letters or with the root's dot as the site's own", %{site: site} do
+      for host <- [
+            "ACTIVE.Example.com",
+            "active.example.com.",
+            "Active.EXAMPLE.com.:4000",
+            "active.example.com.:4000"
+          ] do
+        conn = request("/", host)
+
+        refute conn.halted, host
+        assert conn.assigns.current_site.id == site.id, host
+      end
+    end
+
+    # A build that is neither dev nor test, on an installed CMS, checks the origin of every socket.
+    test "accepts the sockets of a page opened on any of those hosts" do
+      installed = :persistent_term.get(:mishka_installed, :unknown)
+      Application.put_env(:mishka_cms_core, :env_test?, false)
+      MishkaCmsCore.Install.mark_installed!()
+
+      on_exit(fn ->
+        Application.put_env(:mishka_cms_core, :env_test?, true)
+        :persistent_term.put(:mishka_installed, installed)
+      end)
+
+      assert OriginValidator.verify_origin?("https://ACTIVE.example.com")
+      assert OriginValidator.verify_origin?("https://active.example.com.:4000")
+      refute OriginValidator.verify_origin?("https://inactive.example.org.")
+      refute OriginValidator.verify_origin?("https://.")
     end
 
     test "handles multiple host headers by using first", %{site: site} do
@@ -949,32 +981,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
       # Should extract "edge.example.com" and find the site
       refute result_conn.halted
       assert result_conn.assigns.current_site.id == "edge-case-site"
-    end
-
-    test "handles uppercase host headers", %{} do
-      site_attrs = %{
-        id: "case-test-site",
-        name: "Case Test Site",
-        host: "case.example.com",
-        priority: 100,
-        active: true,
-        mode: :hybrid,
-        frontend_domain: nil,
-        allowed_origins: []
-      }
-
-      :ok = SiteState.save(site_attrs)
-
-      conn =
-        conn_with_host(:get, "/", "CASE.EXAMPLE.COM")
-        |> init_test_session(%{})
-        |> fetch_query_params()
-
-      result_conn = SiteLookupPlug.call(conn, %{})
-
-      # Case sensitivity depends on SiteState implementation
-      # This will likely return 503 unless SiteState does case-insensitive matching
-      assert result_conn.status == 503
     end
   end
 

@@ -115,6 +115,10 @@ defmodule MishkaCmsCore.Application do
     MishkaInstaller.MnesiaRepo
   ]
 
+  # `sidebar:status` plugins: the core's own line at the bottom of the sidebar, the background jobs
+  # given up on in the window (`MishkaCmsCore.Layouts.SidebarStatus`).
+  @sidebar_status_plugins [MishkaCmsCore.Layouts.SidebarStatus.FailedJobs]
+
   # `agent:operations` plugins — the installer steps the core keeps receipts for. An extension
   # declares its own operations the same way (see `MishkaCmsCore.Agent.Operation`).
   @agent_operations [
@@ -134,7 +138,8 @@ defmodule MishkaCmsCore.Application do
         @share_card_plugins ++
         @site_icon_plugins ++
         @head_code_plugins ++
-        @mail_providers ++ @captcha_providers ++ @account_notices ++ @agent_operations
+        @mail_providers ++
+        @captcha_providers ++ @account_notices ++ @agent_operations ++ @sidebar_status_plugins
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's
@@ -152,6 +157,12 @@ defmodule MishkaCmsCore.Application do
     # before anything can compile a page, layout or component.
     :persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
 
+    # A page, layout, component or error page is compiled while the node serves, and again at each save
+    # and each check of one. Compiling a module's body makes a module of its own for it
+    # (`elixir_compiler_1`, `_2`, …), which Elixir does not take back: an atom and 3 to 12 KB of code a
+    # compile. An interpreted body makes none, and the compiled module is the same.
+    Code.put_compiler_option(:module_definition, :interpreted)
+
     # `MishkaCmsCore.PubSub` first: every resource broadcasts on it, and the editor's `Presence`
     # tracks on it. `:mishka_cms_core` is a dependency of every extension and of the host, so its
     # application starts before theirs and the PubSub is up before any of their children. What needs
@@ -160,7 +171,8 @@ defmodule MishkaCmsCore.Application do
     #
     # `RenderMetrics` is started here rather than by the host, like the other runtime states, because
     # nothing outside the core reads or writes it: a host that never lists it still gets the
-    # component preview's render times. `Sidebar.Counts` and the agent receipts' store likewise need
+    # component preview's render times. `Sidebar.Counts`, the sidebar status row's short-lived counts
+    # (`Layouts.SidebarStatus`) and the agent receipts' store likewise need
     # nothing of the host's.
     children =
       [{Phoenix.PubSub, name: MishkaCmsCore.PubSub}] ++
@@ -169,6 +181,7 @@ defmodule MishkaCmsCore.Application do
           {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
           MishkaCmsCore.Runtime.RenderMetrics,
           MishkaCmsCore.Sidebar.Counts,
+          MishkaCmsCore.Layouts.SidebarStatus,
           MishkaCmsCore.Agent.ReceiptStore
         ] ++
         plugins()

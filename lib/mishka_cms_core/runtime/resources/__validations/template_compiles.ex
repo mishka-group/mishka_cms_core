@@ -67,11 +67,16 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles do
   end
 
   defp refusal(:own, detail), do: detail
+  defp refusal({:status, status}, detail), do: status_refusal(status, detail)
 
-  defp refusal({:status, status}, detail) when status in [nil, false],
+  @doc """
+  What is wrong with one entry of an Error Page, named by its `status`: "The 404 page: …".
+  """
+  @spec status_refusal(term(), String.t()) :: String.t()
+  def status_refusal(status, detail) when status in [nil, false],
     do: dgettext("errors", "The error page: %{detail}", detail: detail)
 
-  defp refusal({:status, status}, detail),
+  def status_refusal(status, detail),
     do:
       dgettext("errors", "The %{status} page: %{detail}",
         status: to_string(status),

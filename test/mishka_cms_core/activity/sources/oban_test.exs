@@ -438,4 +438,53 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
       assert ObanSource.entry_from_row(row).user_id == nil
     end
   end
+
+  describe "a skipped job" do
+    test "its row is a Skipped entry with its reason, the mark kept out of the message" do
+      row = %{
+        "source_id" => "9",
+        "resource" => "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker",
+        "action" => "skipped",
+        "inserted_at" => ~U[2026-01-01 00:00:00Z],
+        "site_id" => "s1",
+        "user_id" => nil,
+        "payload" => %{
+          ObanSource.skip_key() => %{"reason" => "known outage", "state" => "discarded"}
+        }
+      }
+
+      entry = ObanSource.entry_from_row(row)
+
+      assert entry.action == :skipped
+      assert entry.severity == :skipped
+      assert entry.skip_reason == "known outage"
+      assert entry.message == "RuntimeCompilerWorker skipped"
+
+      assert MishkaCmsCore.Activity.ActivityEntry.job_outcome(
+               MishkaCmsCore.Activity.ActivityEntry.from_entry(entry)
+             ) == :skipped
+    end
+
+    test "a failed row carries no reason and reads as failed" do
+      row = %{
+        "source_id" => "9",
+        "resource" => "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker",
+        "action" => "discarded",
+        "inserted_at" => ~U[2026-01-01 00:00:00Z],
+        "payload" => %{}
+      }
+
+      entry = MishkaCmsCore.Activity.ActivityEntry.from_entry(ObanSource.entry_from_row(row))
+
+      assert entry.skip_reason == nil
+      assert MishkaCmsCore.Activity.ActivityEntry.job_outcome(entry) == :failed
+    end
+
+    test "job_id/1 reads the job of a job entry's id and nothing else" do
+      assert ObanSource.job_id("oban-42-discarded") == 42
+      assert ObanSource.job_id("oban-42") == 42
+      assert ObanSource.job_id("oban-x") == nil
+      assert ObanSource.job_id("version-42") == nil
+    end
+  end
 end

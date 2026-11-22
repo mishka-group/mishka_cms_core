@@ -25,7 +25,9 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
     * `"rehost"` (a new host) → unload the site's modules, which are compiled for its host
       (`SiteRuntime.unload_modules/2`) → `BootHandler.compile_site/2`
     * `"purge"` (deactivate / archive) → `SiteRuntime.purge_parts/3` (keep templates)
-    * `"rename"` → purge under the OLD name (drop templates) → recompile under the new name
+    * `"rename"` → purge under the OLD name (drop templates) → save the site's Error Page, which
+      takes the address of the new name (`MishkaCmsCore.Runtime.ErrorAddress`) → recompile under the
+      new name
 
   The child DB rows still exist here (only permanent-delete removes them), so the
   module list is streamed at run time via `SiteRuntime.module_specs/1`.
@@ -42,6 +44,7 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
   require Logger
 
   alias MishkaCmsCore.Install.StarterContent
+  alias MishkaCmsCore.Runtime.ErrorAddress
   alias MishkaCmsCore.Runtime.Handlers.{SiteRuntime, BootHandler}
   alias MishkaCmsCore.Runtime.States.SiteState
 
@@ -131,6 +134,18 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
 
   defp dispatch("rename", site_id, site_name, old_name) do
     SiteRuntime.purge_parts(old_name, SiteRuntime.module_specs(site_id), true)
+    move_error_page(site_id)
     BootHandler.compile_site(site_id, site_name)
+  end
+
+  # Saved with nothing of its own: the save writes the address
+  # (`MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress`).
+  defp move_error_page(site_id) do
+    with %{} = error_page <- ErrorAddress.find(site_id),
+         {:error, reason} <- Ash.update(error_page, %{}, tenant: site_id, authorize?: false) do
+      Logger.warning(
+        "[SiteRuntimeWorker] the Error Page of #{site_id} keeps its old address: #{Exception.message(reason)}"
+      )
+    end
   end
 end

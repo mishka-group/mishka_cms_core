@@ -195,10 +195,10 @@ msgid "component"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/__validations/stateful_placement.ex:328
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:284
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:313
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:336
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:355
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:285
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:314
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:337
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:356
 #, elixir-autogen
 msgid "error page"
 msgstr ""
@@ -427,8 +427,8 @@ msgstr ""
 msgid "Cannot edit archived component. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1012
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1044
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1028
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1064
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived error page. Please unarchive it first."
 msgstr ""
@@ -549,9 +549,9 @@ msgstr ""
 msgid "Cannot restore version of archived component. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1385
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1415
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1436
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1405
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1440
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1461
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived error page. Please unarchive it first."
 msgstr ""
@@ -625,12 +625,12 @@ msgstr ""
 msgid "Content cannot be empty."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1168
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1188
 #, elixir-autogen, elixir-format
 msgid "Error page is already archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1235
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1255
 #, elixir-autogen, elixir-format
 msgid "Error page is not archived."
 msgstr ""
@@ -686,7 +686,7 @@ msgstr ""
 msgid "Name and host cannot be empty."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:131
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:134
 #, elixir-autogen, elixir-format
 msgid "Name and path cannot be empty."
 msgstr ""
@@ -719,7 +719,7 @@ msgstr ""
 msgid "Name must be between 3 and 100 characters."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:118
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:121
 #: lib/mishka_cms_core/runtime/resources/page.ex:135
 #, elixir-autogen, elixir-format
 msgid "Name must be between 3 and 200 characters."
@@ -745,12 +745,12 @@ msgstr ""
 msgid "Page is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:59
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:62
 #, elixir-autogen, elixir-format
 msgid "Path must be a string."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:122
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:125
 #: lib/mishka_cms_core/runtime/resources/layout.ex:114
 #: lib/mishka_cms_core/runtime/resources/page.ex:143
 #, elixir-autogen, elixir-format
@@ -758,7 +758,7 @@ msgid "Path must be between 1 and 255 characters."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:133
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:126
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:129
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:69
 #: lib/mishka_cms_core/runtime/resources/layout.ex:122
 #: lib/mishka_cms_core/runtime/resources/page.ex:151
@@ -799,8 +799,8 @@ msgstr ""
 msgid "Template must have at least 1 character."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:370
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:396
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:371
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:397
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:387
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:413
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:634
@@ -832,10 +832,10 @@ msgstr ""
 msgid "Version does not belong to this component."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1419
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1440
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1488
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1544
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1444
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1465
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1513
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1569
 #, elixir-autogen, elixir-format
 msgid "Version does not belong to this error page."
 msgstr ""
@@ -1028,11 +1028,11 @@ msgstr ""
 msgid "A site user can act only on their own site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:938
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:968
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:999
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1031
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1397
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:946
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:980
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1015
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1051
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1417
 #, elixir-autogen, elixir-format
 msgid "An error page"
 msgstr ""
@@ -1052,7 +1052,7 @@ msgstr ""
 msgid "Component name must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1848
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1873
 #, elixir-autogen, elixir-format
 msgid "Error page name must be unique within a site."
 msgstr ""
@@ -1092,7 +1092,7 @@ msgstr ""
 msgid "Host must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1301
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1340
 #, elixir-autogen, elixir-format
 msgid "Invalid"
 msgstr ""
@@ -1143,27 +1143,27 @@ msgstr ""
 msgid "Page path must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:77
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:87
 #, elixir-autogen, elixir-format
 msgid "Path may only contain letters, digits, and the characters - _ / . : *"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:67
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:77
 #, elixir-autogen, elixir-format
 msgid "Path must be at most %{max} characters"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:70
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:80
 #, elixir-autogen, elixir-format
 msgid "Path must not contain '..' (directory traversal)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:73
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:83
 #, elixir-autogen, elixir-format
 msgid "Path must not contain '//' (empty path segment)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:64
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:74
 #, elixir-autogen, elixir-format
 msgid "Path must start with '/'"
 msgstr ""
@@ -1173,8 +1173,8 @@ msgstr ""
 msgid "Please select a file to upload"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1870
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:694
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1895
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:695
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1997
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:730
 #: lib/mishka_cms_core/runtime/resources/page.ex:2727
@@ -1208,7 +1208,7 @@ msgstr ""
 msgid "The %{status} page: "
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/template_compiles.ex:76
+#: lib/mishka_cms_core/runtime/resources/__validations/template_compiles.ex:81
 #, elixir-autogen, elixir-format
 msgid "The %{status} page: %{detail}"
 msgstr ""
@@ -1228,7 +1228,7 @@ msgstr ""
 msgid "The error page: "
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/template_compiles.ex:72
+#: lib/mishka_cms_core/runtime/resources/__validations/template_compiles.ex:77
 #, elixir-autogen, elixir-format
 msgid "The error page: %{detail}"
 msgstr ""
@@ -1253,7 +1253,12 @@ msgstr ""
 msgid "This email exists and cannot be used as a master account"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page.ex:1859
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:66
+#, elixir-autogen, elixir-format
+msgid "This path is kept for the site's error pages"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/error_page.ex:1884
 #, elixir-autogen, elixir-format
 msgid "This site already has an error page — open that one instead of making another."
 msgstr ""
@@ -2614,12 +2619,12 @@ msgstr ""
 msgid "This post's address, %{address}, is already a page of this site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:87
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:97
 #, elixir-autogen, elixir-format
 msgid "A wildcard like *rest must start a path segment"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:84
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:94
 #, elixir-autogen, elixir-format
 msgid "Path may hold only one wildcard like *rest"
 msgstr ""
@@ -2772,4 +2777,19 @@ msgstr ""
 #: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:65
 #, elixir-autogen, elixir-format
 msgid "is too small"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/error_status_once.ex:67
+#, elixir-autogen, elixir-format
+msgid "Entry %{number} is a second %{status} page. Keep one entry for each status."
+msgstr ""
+
+#: lib/mishka_cms_core/skip/__changes/skip.ex:45
+#, elixir-autogen, elixir-format
+msgid "Only a failed item can be skipped."
+msgstr ""
+
+#: lib/mishka_cms_core/skip/__changes/bring_back.ex:59
+#, elixir-autogen, elixir-format
+msgid "Only a skipped item can be brought back."
 msgstr ""

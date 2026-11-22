@@ -344,6 +344,22 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
       assert RenderMetrics.stats({module, 500}) == nil
     end
 
+    test "the default entry is counted once for every code it answered", %{site: site, n: n} do
+      module =
+        error_page!(site, n,
+          error_pages: [
+            %{status: :default, template: ~s|<h1>{#{@spin}(100)} {@status}</h1>|},
+            %{status: 404, template: ~s|<h1>{#{@spin}(100)}</h1>|}
+          ]
+        )
+
+      for status <- [403, 406, 404], do: show(module, status)
+
+      assert %{full: %{count: 2}} = RenderMetrics.stats({module, :default})
+      assert %{full: %{count: 1}} = RenderMetrics.stats({module, 404})
+      assert RenderMetrics.stats({module, 403}) == nil
+    end
+
     test "with a HEEx root the page is drawn after the call and still timed", %{site: site, n: n} do
       module =
         error_page!(site, n,
@@ -366,7 +382,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
         stats: %{
           full: %{count: 39, avg_us: 1015},
           update: %{count: 0, avg_us: 0},
-          statuses: [{404, %{count: 37, avg_us: 800}}, {500, %{count: 2, avg_us: 1100}}]
+          statuses: [{404, %{count: 37, avg_us: 800}}, {:default, %{count: 2, avg_us: 1100}}]
         },
         build: nil
       }
@@ -381,7 +397,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
       shown = box(html, "runtime-preview-rerenders")
       assert shown =~ "Shown"
       assert shown =~ "39"
-      assert shown =~ "404 800 µs ×37 · 500 1.1 ms ×2"
+      assert shown =~ "404 800 µs ×37 · Default 1.1 ms ×2"
       assert box(html, "runtime-preview-render-time") =~ "1.0 ms"
     end
   end

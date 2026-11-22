@@ -10,13 +10,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
   into one filterable, paginated timeline.
 
   Renders from the sibling `index.html.heex`.
+
+  ## Skipping a failed job
+
+  A failed job's Skip (the resource's `:skip_job` row action) opens
+  `MishkaCmsCoreWeb.Live.Admin.Components.SkipQuestion` for an optional reason; its button skips the
+  job (`MishkaCmsCore.Activity.Sources.Oban.skip/3`) and shows a toast whose Undo brings it back
+  (`MishkaGervaz.Toast`, answered in `handle_info({:toast_undo, ...})`). A skipped job's Bring back
+  (`:bring_back_job`) brings it back at once. Every open log of the job's site, this one included,
+  hears the change on `MishkaCmsCore.Skip.topic/0` and reads its rows and counts again.
   """
   use MishkaCmsCore.ExtensionLiveView
 
   alias MishkaCmsCore.Activity.{ActivityEntry, Helpers, Query}
   alias MishkaCmsCore.Activity.Sources.{EventLog, Oban, RuntimeDraft, PaperTrail}
-  alias MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed
+  alias MishkaCmsCore.Layouts.TopbarNeeds
+  alias MishkaCmsCore.Skip
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{ActivityFeed, SkipQuestion}
   alias MishkaGervaz.Table.Web.UrlSync
+  alias MishkaGervaz.Toast
 
   @sources [PaperTrail, EventLog, Oban, RuntimeDraft]
   @table_id "activity-table"
@@ -30,15 +42,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
       for topic <- ActivityFeed.topics_for(socket.assigns.current_user, @sources, nil) do
         Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, topic)
       end
+
+      Skip.subscribe()
     end
 
-    {:ok,
-     socket
-     |> assign(:resources, resources)
-     |> assign(:page_title, gettext("Activity Logs"))
-     |> assign(:url_state, nil)
-     |> assign(:counts, nil)
-     |> load_counts()}
+    new_socket =
+      socket
+      |> Toast.attach()
+      |> assign(:resources, resources)
+      |> assign(:page_title, gettext("Activity Logs"))
+      |> assign(:url_state, nil)
+      |> assign(:counts, nil)
+      |> assign(:skip_job, nil)
+      |> load_counts()
+
+    {:ok, new_socket}
   end
 
   @doc """
@@ -88,7 +106,66 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
     end
   end
 
+  def handle_info({:row_action, "skip_job", %{"id" => id}}, socket),
+    do: {:noreply, assign(socket, :skip_job, Oban.job_id(id))}
+
+  def handle_info({:row_action, "bring_back_job", %{"id" => id}}, socket),
+    do: {:noreply, bring_back(socket, Oban.job_id(id))}
+
+  def handle_info({:toast_undo, {:bring_back_job, job_id}}, socket),
+    do: {:noreply, bring_back(socket, job_id)}
+
+  def handle_info({:skip_changed, %{source: "core:job", site_id: site_id}}, socket) do
+    case TopbarNeeds.concerns?(socket.assigns.current_user, site_id) do
+      true ->
+        send_update(MishkaGervaz.Table.Web.Live, id: @table_id, gervaz_refresh: true)
+        {:noreply, load_counts(socket)}
+
+      false ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("skip_cancel", _params, socket), do: {:noreply, assign(socket, :skip_job, nil)}
+
+  def handle_event("skip_confirm", params, %{assigns: %{skip_job: job_id}} = socket)
+      when is_integer(job_id) do
+    socket = assign(socket, :skip_job, nil)
+
+    new_socket =
+      case Oban.skip(socket.assigns.current_user, job_id, params["reason"]) do
+        {:ok, _job} ->
+          Toast.push(socket, :info, gettext("Job skipped. It will not be tried again."),
+            undo: {:bring_back_job, job_id}
+          )
+
+        {:error, reason} ->
+          Toast.push(socket, :error, refusal(reason))
+      end
+
+    {:noreply, new_socket}
+  end
+
+  def handle_event("skip_confirm", _params, socket),
+    do: {:noreply, assign(socket, :skip_job, nil)}
+
+  defp bring_back(socket, job_id) do
+    case Oban.bring_back(socket.assigns.current_user, job_id) do
+      {:ok, _job} ->
+        Toast.push(socket, :ok, gettext("Job brought back. It counts as failed again."))
+
+      {:error, reason} ->
+        Toast.push(socket, :error, refusal(reason))
+    end
+  end
+
+  defp refusal(:forbidden), do: gettext("You may not change this job.")
+  defp refusal(:not_found), do: gettext("This job is no longer there.")
+  defp refusal(:not_failed), do: gettext("Only a failed job can be skipped.")
+  defp refusal(:not_skipped), do: gettext("This job is not skipped.")
 
   # A live entry of an area the viewer does not hold is not shown, and one whose resource the
   # broadcast does not name is shown to a full dashboard admin alone.
@@ -110,7 +187,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
       {gettext("Total events"), :total, "text-[#a8a5a0]", nil},
       {gettext("Info"), :info, "text-[#177a53]", "bg-[#1f9d6b]"},
       {gettext("Warning"), :warn, "text-[#a5691a]", "bg-[#cf8a24]"},
-      {gettext("Error"), :error, "text-[#b3433a]", "bg-[#d5544b]"}
+      {gettext("Error"), :error, "text-[#b3433a]", "bg-[#d5544b]"},
+      {gettext("Skipped"), :skipped, "text-[#8a877f]", "bg-[#a8a5a0]"}
     ]
   end
 

@@ -17,6 +17,8 @@ defmodule MishkaCmsCore.Builder.EventsTest do
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
+  alias MishkaCmsCore.Runtime.Authoring.Strict
+  alias MishkaCmsCore.Test.Plugins.BuilderComponentNotesPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderSaveGatePlugin
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarInvokedProbe
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarProbe
@@ -209,6 +211,51 @@ defmodule MishkaCmsCore.Builder.EventsTest do
 
       assert_receive {BuilderToolbarInvokedProbe,
                       %{action: "probe-toolbar", node_id: "nabcdefgh", token: "a-session-token"}}
+    end
+  end
+
+  describe "the notes of a placed component" do
+    defp notes_of(component, attrs \\ %{}) do
+      Events.component_notes(%{
+        component: component,
+        attrs: attrs,
+        node_id: "nabcdefgh",
+        site_id: nil,
+        site_name: nil
+      })
+    end
+
+    test "with no plugin, a component has no notes" do
+      assert notes_of("acme-product", %{"product" => "photo-pack"}) == []
+    end
+
+    test "a plugin's note comes back with the component's own attributes in it" do
+      register!(BuilderComponentNotesPlugin, "builder:component:notes")
+
+      assert [%{severity: :warning, message: message, detail: "Visitors see nothing here."}] =
+               notes_of("acme-product", %{"product" => "photo-pack"})
+
+      assert message =~ "photo-pack"
+      assert notes_of("acme-other") == []
+    end
+
+    test "a note of another shape is refused out loud in development" do
+      register!(BuilderComponentNotesPlugin, "builder:component:notes")
+
+      assert_raise Strict.Violation, ~r/expected %\{severity/, fn -> notes_of("acme-broken") end
+    end
+
+    @tag :capture_log
+    test "a plugin that raises costs the notes, never the editor" do
+      register!(BuilderComponentNotesPlugin, "builder:component:notes")
+
+      assert notes_of("acme-raise") == []
+    end
+
+    test "while the plugins cannot run, there are no notes" do
+      MishkaCmsCore.Test.EventCannotRun.stub!(["builder:component:notes"])
+
+      assert notes_of("acme-product", %{"product" => "photo-pack"}) == []
     end
   end
 

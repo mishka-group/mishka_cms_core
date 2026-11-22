@@ -94,7 +94,9 @@ defmodule MishkaCmsCore.Sidebar do
 
   An entry may show a number beside its label. The extension supplies it with
   `MishkaCmsCore.Sidebar.Counts.put/3`, from wherever its data changes, and open pages update the
-  chip without a reload. It is kept in memory, so drawing it costs no query; zero hides it.
+  chip without a reload. It is kept in memory, so drawing it costs no query; zero hides it. A number
+  that belongs to a site is put with that site (`Counts.put/4`) and each viewer reads their own
+  site's, a master the sum.
 
   ## A bar at the bottom of a narrow screen
 
@@ -290,10 +292,22 @@ defmodule MishkaCmsCore.Sidebar do
       # WHO THE EXTENSION IS AND WHERE ITS OWN PAGE IS, for the "Powered by" line under every page it
       # owns — see `MishkaCmsCore.Sidebar.credit/1`. Both declared once, on one of the extension's
       # entries; an entry that names only one of them credits nobody.
+      #
+      # An extension whose own design has no such line sets `credit_footer: false` on one of its
+      # entries, and none of its pages draws it — see `MishkaCmsCore.Sidebar.footer?/1`.
       field(:credit_name, String.t())
       field(:credit_url, String.t())
+      field(:credit_footer, boolean(), default: true)
       field(:parent, String.t())
       field(:mark, String.t())
+      # WHAT THE ENTRY'S NUMBER COUNTS ("Orders today"), the chip's title and what a screen reader
+      # says with the number — see `MishkaCmsCore.Sidebar.Counts`. Left blank, the chip is the bare
+      # number.
+      field(:count_label, String.t())
+
+      # WHERE THE NUMBER IS LISTED ("/events?state=not_handled"): while the entry shows a number its
+      # link opens this address, so the row and the bell lead to the same list. Left blank, `path`.
+      field(:count_path, String.t())
       field(:children, list(), default: [])
     end
 
@@ -709,6 +723,36 @@ defmodule MishkaCmsCore.Sidebar do
     do: current == path or String.starts_with?(current, path <> "/")
 
   @doc """
+  The heading of the page at `current_path`, what the top bar shows on a phone:
+  `%{eyebrow: label, title: label}`. `title` is the label of the page's entry (the one `menu/2`
+  marks), and `eyebrow` the label of the entry above it or, for a top row, of its group. Both are
+  the declared labels, untranslated, and `nil` where no entry names them (`eyebrow` of Home, both
+  for a page the sidebar does not declare).
+
+      section("/admin/dashboard/runtime/pages") #=> %{eyebrow: "Runtime", title: "Pages"}
+  """
+  @spec section(String.t() | nil) :: %{eyebrow: String.t() | nil, title: String.t() | nil}
+  def section(current_path) do
+    %{groups: groups, items: items} = collect()
+    by_key = Map.new(items, &{&1.key, &1})
+
+    case trail(items, current_path) do
+      [] ->
+        %{eyebrow: nil, title: nil}
+
+      keys ->
+        entry = by_key[List.last(keys)]
+        above = keys |> Enum.drop(-1) |> List.last()
+        %{eyebrow: above_label(by_key[above], entry, groups), title: entry.label}
+    end
+  end
+
+  defp above_label(%Item{label: label}, _entry, _groups), do: label
+
+  defp above_label(nil, %Item{group: group}, groups),
+    do: Enum.find_value(groups, &(&1.key == group && &1.label))
+
+  @doc """
   The `order`/`visible` setting definitions for every declared entry — what
   `MishkaCmsCore.Sidebar.MenuSettings` registers with the Settings page.
 
@@ -801,6 +845,26 @@ defmodule MishkaCmsCore.Sidebar do
       %{name: name, url: url}
     else
       _none -> nil
+    end
+  end
+
+  @doc """
+  Whether the page `module` mounts draws the "Powered by" line: `false` when an entry of the
+  extension that owns the page declares `credit_footer: false`, `true` for every other page,
+  a core page included.
+  """
+  @spec footer?(module() | nil) :: boolean()
+  def footer?(nil), do: true
+
+  def footer?(module) do
+    %{items: items} = collect()
+
+    case Enum.find(items, &(&1.module == module)) do
+      %Item{extension: extension} when not is_nil(extension) ->
+        not Enum.any?(items, &(&1.extension == extension and &1.credit_footer == false))
+
+      _core_or_undeclared ->
+        true
     end
   end
 

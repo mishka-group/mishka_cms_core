@@ -167,7 +167,7 @@ defmodule MishkaCmsCore.Settings do
   """
   @spec offline?(map() | String.t() | nil) :: boolean()
   def offline?(site) do
-    get("cms.offline", false) == true or get("cms.offline", false, site_id(site)) == true
+    get("cms.offline", false) == true or own_offline?(site_id(site))
   end
 
   @doc """

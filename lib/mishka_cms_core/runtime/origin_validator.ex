@@ -39,13 +39,17 @@ defmodule MishkaCmsCore.Runtime.OriginValidator do
                      binary_part(host, byte_size(host) - 10, 10) == ".localhost")
 
   @doc """
-  The host a `Host` header names, without its port: `"example.com:4000"` is `"example.com"` and
+  The host a `Host` header names, as a site's host is stored: without its port, in lower case and
+  without the root's dot. Only `A` to `Z` are lowered, so no other letter makes it another site's host
+  (the Kelvin sign is not a `k`). `"Example.com:4000"` and `"example.com."` are `"example.com"`, and
   `"[::1]:4000"` is `"::1"`. `nil` for a header that names none.
   """
   @spec host_name(String.t() | nil) :: String.t() | nil
   def host_name(header) when is_binary(header) do
-    case URI.parse("//" <> header) do
-      %URI{host: host} when is_binary(host) and host != "" -> host
+    with %URI{host: host} when is_binary(host) <- URI.parse("//" <> header),
+         name when name != "" <- host |> String.downcase(:ascii) |> String.replace_suffix(".", "") do
+      name
+    else
       _no_host -> nil
     end
   end
@@ -156,7 +160,7 @@ defmodule MishkaCmsCore.Runtime.OriginValidator do
         true
 
       true ->
-        MishkaCmsCore.Runtime.States.SiteState.host_exists?(host)
+        host |> host_name() |> MishkaCmsCore.Runtime.States.SiteState.host_exists?()
     end
   end
 

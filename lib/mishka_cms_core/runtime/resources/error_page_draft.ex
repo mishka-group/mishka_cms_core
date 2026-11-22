@@ -12,8 +12,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
   and its `element_css`, the Custom CSS applied to the elements of all of them in the editor's Draft
   stage, as on `PageDraft`.
   The preview modal's Code tab edits the collection serialized as `<!-- 404 -->`-delimited blocks —
-  `<!-- offline -->` for the offline page, see `MishkaCmsCore.Runtime.ErrorStatus` — (round-tripped
-  via `RuntimePreview.source/1` + `RuntimePreview.parse_error_pages/1`).
+  `<!-- offline -->` for the offline page and `<!-- default -->` for the default one, see
+  `MishkaCmsCore.Runtime.ErrorStatus` — (round-tripped via `RuntimePreview.source/1` +
+  `RuntimePreview.parse_error_pages/1`).
 
   Publishing is explicit (`:publish` / `:master_publish`): it writes the draft's fields to the live
   ErrorPage (creating it when `source_error_page_id` is `nil`, otherwise updating all but its

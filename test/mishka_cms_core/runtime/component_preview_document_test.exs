@@ -22,7 +22,7 @@ defmodule MishkaCmsCore.Runtime.ComponentPreviewDocumentTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
-  alias MishkaCmsCore.Runtime.{Component, Layout, RuntimePreview}
+  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout, Page, RuntimePreview}
   alias MishkaCmsCore.Runtime.States.AssetsState
 
   defp component(overrides \\ []) do
@@ -208,4 +208,77 @@ defmodule MishkaCmsCore.Runtime.ComponentPreviewDocumentTest do
   end
 
   defp unique, do: System.unique_integer([:positive])
+
+  describe "the document an error page's unsaved edit is drawn in" do
+    @linked ~S"""
+    <!DOCTYPE html>
+    <html><head>
+      <link rel="stylesheet" href="/fonts/fonts.css" />
+      <link rel="stylesheet" href="<%= MishkaCmsCore.Runtime.Compilers.Shared.site_css_href(@conn.assigns.current_site.name) %>" />
+      <style nonce="<%= @conn.assigns[:csp_nonce] %>">.own{}</style>
+    </head><body><%= @inner_content %></body></html>
+    """
+
+    setup do
+      site = "sandboxed-#{System.unique_integer([:positive])}"
+      on_exit(fn -> AssetsState.delete(site, "css") end)
+
+      record = %{
+        name: "errors",
+        site: %{id: Ecto.UUID.generate(), name: site, host: "#{site}.test"},
+        root_layout_template: @linked,
+        error_pages: [%{status: 404, template: ~S|<h1 class="probe">Gone</h1>|}]
+      }
+
+      {:ok, site: site, record: record}
+    end
+
+    defp bundle(site, css) do
+      AssetsState.save(%{
+        id: site,
+        type: "css",
+        value: css,
+        hash: "abc123",
+        updated_at: DateTime.utc_now()
+      })
+    end
+
+    # Its frame holds no cookie, so the admin's host answers the link with a 404.
+    test "holds the site's bundle where its root layout links it, under the document's nonce", %{
+      site: site,
+      record: record
+    } do
+      bundle(site, ~S|.probe{content:"\\1"}|)
+
+      {html, nil} = RuntimePreview.render_document(record, ErrorPage, "n0nce")
+
+      assert html =~ ~S|<style nonce="n0nce">.probe{content:"\\1"}</style>|
+      assert html =~ ~S|<style nonce="n0nce">.own{}</style>|
+      assert html =~ ~s(href="/fonts/fonts.css")
+      refute html =~ "/assets/css/"
+    end
+
+    test "leaves a bundle too large to travel out, and the dead link with it", %{
+      site: site,
+      record: record
+    } do
+      bundle(site, String.duplicate("/* large */", 300_000))
+
+      {html, nil} = RuntimePreview.render_document(record, ErrorPage, "n0nce")
+
+      assert byte_size(html) < 10_000
+      refute html =~ "/assets/css/"
+
+      page = %{name: "Page", template: "<p>ok</p>", site: record.site}
+      {html, nil} = RuntimePreview.render_document(page, Page, "n0nce")
+      assert byte_size(html) < 10_000
+    end
+
+    test "is as its root layout made it for a site with no bundle", %{record: record} do
+      {html, nil} = RuntimePreview.render_document(record, ErrorPage, "n0nce")
+
+      assert html =~ ~s(<h1 class="probe">Gone</h1>)
+      assert html =~ ~s(href="/fonts/fonts.css")
+    end
+  end
 end

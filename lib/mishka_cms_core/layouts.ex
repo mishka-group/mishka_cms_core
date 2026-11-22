@@ -30,6 +30,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
+  alias MishkaCmsCore.Layouts.{SidebarStatus, TopbarNeeds, TopbarSearch, TopbarStatus}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -142,7 +143,15 @@ defmodule MishkaCmsCore.Layouts do
   Settings. This component only paints what it is handed, so an empty section is one that was
   filtered away rather than one that has to be spelled out here. `version` is `@sidebar_version`: the
   sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
-  beside entries (`MishkaCmsCore.Sidebar.Counts`).
+  beside entries (`MishkaCmsCore.Sidebar.Counts`). `status` is `@sidebar_status`, the lines the
+  parts of the CMS count (`MishkaCmsCore.Layouts.SidebarStatus`), and `status_card` is
+  `@sidebar_status_card`, the card drawn from them by `status_card/1` above the footer's entries:
+  nothing without one. `status_now` is `@sidebar_status_now`, the time the card's "Checked 1 min
+  ago" is counted to.
+
+  While a page under an entry is open, the entry's top row is drawn in the open page's colours, its
+  arrow included, and the rows between it and the page are bold. Every nested row leads with a dot,
+  filled for the open page and the rows above it.
 
   A group and a branch fold with `Phoenix.LiveView.JS`; the `SidebarScroll` hook keeps what was
   folded by hand. The branch of the open page is open, and so is the group holding it. Under 980px
@@ -153,6 +162,19 @@ defmodule MishkaCmsCore.Layouts do
   attr :current_user, :any, default: nil
   attr :version, :integer, default: 0
   attr :counts, :map, default: %{}
+
+  attr :status, :list,
+    default: [],
+    doc: "`@sidebar_status`, the lines of `MishkaCmsCore.Layouts.SidebarStatus`"
+
+  attr :status_card, :map,
+    default: nil,
+    doc:
+      "`@sidebar_status_card`, the card `SidebarStatus.card/2` made of them; no card when `nil`"
+
+  attr :status_now, :any,
+    default: nil,
+    doc: "`@sidebar_status_now`, the time the card counts its check's age to; now when `nil`"
 
   def sidebar(assigns) do
     %{main: main, footer: footer, trail: trail} =
@@ -213,7 +235,7 @@ defmodule MishkaCmsCore.Layouts do
               <button
                 type="button"
                 data-fold
-                aria-expanded="true"
+                aria-expanded={to_string(group_open?(entry, @trail))}
                 aria-controls={dom_id("sb", entry.key)}
                 phx-click={fold(dom_id("sb", entry.key))}
                 class="group mb-1 mt-4 flex w-full items-center gap-2.5 px-[10px] py-1.5"
@@ -233,7 +255,10 @@ defmodule MishkaCmsCore.Layouts do
                   class="size-[13px] text-[#c2bfb6] transition-transform group-aria-expanded:rotate-180"
                 />
               </button>
-              <div id={dom_id("sb", entry.key)} class="flex flex-col gap-0.5">
+              <div
+                id={dom_id("sb", entry.key)}
+                class={["flex flex-col gap-0.5", !group_open?(entry, @trail) && "hidden"]}
+              >
                 <.nav_link :for={item <- entry.items} item={item} trail={@trail} counts={@counts} />
               </div>
             </div>
@@ -291,17 +316,7 @@ defmodule MishkaCmsCore.Layouts do
       </nav>
 
       <div id="admin-sidebar-footer" class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
-        <div class="mb-2 rounded-[13px] border border-[#e2ece5] bg-[#f3f8f4] px-[13px] py-3">
-          <div class="flex items-center gap-2">
-            <span class="size-2 shrink-0 animate-pulse rounded-full bg-[#1f9d6b]"></span>
-            <span class="text-[11.5px] font-bold text-[#177a53]">
-              {gettext("All systems operational")}
-            </span>
-          </div>
-          <div class="mt-[5px] ps-4 text-[10.5px] font-medium text-[#8a938c]">
-            {gettext("Runtime · %{uptime} uptime", uptime: "99.98%")}
-          </div>
-        </div>
+        <.status_card card={@status_card} lines={@status} now={@status_now} />
         <.nav_link :for={item <- @footer_entries} item={item} trail={@trail} counts={@counts} />
       </div>
     </aside>
@@ -318,18 +333,245 @@ defmodule MishkaCmsCore.Layouts do
     """
   end
 
+  @card_hover "transition-shadow hover:shadow-[0_2px_10px_rgba(30,28,24,0.08)]"
+
+  attr :card, :map, default: nil, doc: "the card of `MishkaCmsCore.Layouts.SidebarStatus.card/2`"
+  attr :lines, :list, default: [], doc: "the lines it was made of, which decide what a press does"
+
+  attr :now, :any,
+    default: nil,
+    doc: "the time an `:ok` card counts its check's age to; now when `nil`"
+
+  @doc """
+  The status card at the bottom of the sidebar, above its entries (`MishkaCmsCore.Layouts.SidebarStatus`),
+  in the tone of its level: green for `:ok`, blue for `:info`, amber for `:warn`, red for
+  `:error`, each dot with a soft halo that grows and fades behind it (still for a viewer who asked
+  for reduced motion). It reads the card's title over its detail; an `:ok` card with no detail
+  says how long ago the check ran, counted to `now` (`SidebarStatus.checked_label/2`).
+
+    * no card: nothing;
+    * one problem or note line with a link: the card opens its page;
+    * several lines: the card is a button opening the list of the lines, beside the sidebar on a
+      wide screen and as a sheet at the bottom of the screen on a phone, each line a link to its
+      page; Escape and a click outside close it and `aria-expanded` follows it;
+    * otherwise the card is not pressable.
+
+  The keyboard focus ring is drawn in the card's own tone, and a click leaves no outline.
+  """
+  def status_card(%{card: nil} = assigns), do: ~H""
+
+  def status_card(%{lines: [_first, _second | _rest]} = assigns) do
+    assigns = assign(assigns, hover: @card_hover, detail: card_detail(assigns))
+
+    ~H"""
+    <div class="relative">
+      <button
+        type="button"
+        id="admin-sidebar-status-card"
+        data-state={card_state(@card.level)}
+        data-level={@card.level}
+        aria-controls="admin-sidebar-status-list"
+        aria-expanded="false"
+        phx-click={toggle_status()}
+        class={[card_class(@card.level), "block w-full text-start", @hover]}
+      >
+        <.card_body level={@card.level} title={@card.title} detail={@detail} />
+      </button>
+      <.status_list title={@card.title} lines={@lines} />
+    </div>
+    """
+  end
+
+  def status_card(%{lines: [%{level: level, link: link}]} = assigns)
+      when level != :ok and is_binary(link) do
+    assigns = assign(assigns, hover: @card_hover, detail: card_detail(assigns), link: link)
+
+    ~H"""
+    <.link
+      navigate={@link}
+      id="admin-sidebar-status-card"
+      data-state={card_state(@card.level)}
+      data-level={@card.level}
+      class={[card_class(@card.level), "block no-underline", @hover]}
+    >
+      <.card_body level={@card.level} title={@card.title} detail={@detail} />
+    </.link>
+    """
+  end
+
+  def status_card(assigns) do
+    assigns = assign(assigns, :detail, card_detail(assigns))
+
+    ~H"""
+    <div
+      id="admin-sidebar-status-card"
+      data-state={card_state(@card.level)}
+      data-level={@card.level}
+      class={card_class(@card.level)}
+    >
+      <.card_body level={@card.level} title={@card.title} detail={@detail} />
+    </div>
+    """
+  end
+
+  defp card_state(:ok), do: "ok"
+  defp card_state(_level), do: "issues"
+
+  defp card_detail(%{card: %{level: :ok, detail: nil}, lines: [line]} = assigns),
+    do: SidebarStatus.checked_label(line, assigns.now || DateTime.utc_now())
+
+  defp card_detail(%{card: card}), do: card.detail
+
+  attr :level, :atom, required: true
+  attr :title, :string, required: true
+  attr :detail, :string, default: nil
+
+  defp card_body(assigns) do
+    assigns = assign(assigns, :tone, card_tone(assigns.level))
+
+    ~H"""
+    <div class="flex items-center gap-2">
+      <.card_dot level={@level} />
+      <span class={["min-w-0 truncate text-[11.5px] font-bold", @tone.title]}>{@title}</span>
+    </div>
+    <div :if={@detail} class={["mt-[5px] truncate ps-4 text-[10.5px] font-medium", @tone.line]}>
+      {@detail}
+    </div>
+    """
+  end
+
+  attr :level, :atom, required: true
+
+  defp card_dot(assigns) do
+    assigns = assign(assigns, :dot, card_tone(assigns.level).dot)
+
+    ~H"""
+    <span class="relative flex size-2 shrink-0">
+      <span
+        data-halo
+        class={[
+          "absolute inset-0 animate-ping rounded-full opacity-40 [animation-duration:2.4s] motion-reduce:hidden motion-reduce:animate-none",
+          @dot
+        ]}
+      ></span>
+      <span class={["relative size-2 rounded-full", @dot]}></span>
+    </span>
+    """
+  end
+
+  defp card_class(level),
+    do: [
+      "mb-2 rounded-[13px] border px-[13px] py-3 outline-none focus-visible:ring-2",
+      card_tone(level).box
+    ]
+
+  defp card_tone(:ok),
+    do: %{
+      box: "border-[#e2ece5] bg-[#f3f8f4] focus-visible:ring-[#cfe3d6]",
+      dot: "bg-[#1f9d6b]",
+      title: "text-[#177a53]",
+      line: "text-[#3f8a69]"
+    }
+
+  defp card_tone(:info),
+    do: %{
+      box: "border-[#dde6f6] bg-[#f2f6fd] focus-visible:ring-[#c9d8f1]",
+      dot: "bg-[#4a7fd4]",
+      title: "text-[#2f5fa8]",
+      line: "text-[#5378b5]"
+    }
+
+  defp card_tone(:warn),
+    do: %{
+      box: "border-[#f3e7cd] bg-[#fefaf1] focus-visible:ring-[#ecdcb6]",
+      dot: "bg-[#c8931f]",
+      title: "text-[#9a6a07]",
+      line: "text-[#a57a24]"
+    }
+
+  defp card_tone(:error),
+    do: %{
+      box: "border-[#f5dfdc] bg-[#fdf4f3] focus-visible:ring-[#f1cfca]",
+      dot: "bg-[#c0392b]",
+      title: "text-[#b3382d]",
+      line: "text-[#bd5a50]"
+    }
+
+  attr :title, :string, required: true
+  attr :lines, :list, required: true
+
+  defp status_list(assigns) do
+    ~H"""
+    <div
+      id="admin-sidebar-status-list"
+      role="dialog"
+      aria-label={@title}
+      phx-click-away={close_status()}
+      phx-window-keydown={close_status()}
+      phx-key="Escape"
+      class="absolute bottom-0 start-full z-[95] ms-3 hidden w-[260px] rounded-[14px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_14px_34px_rgba(30,28,24,0.14)] max-[980px]:fixed max-[980px]:inset-x-0 max-[980px]:bottom-0 max-[980px]:start-0 max-[980px]:ms-0 max-[980px]:w-auto max-[980px]:rounded-b-none max-[980px]:pb-[max(8px,env(safe-area-inset-bottom))]"
+    >
+      <.status_line :for={line <- @lines} line={line} />
+    </div>
+    """
+  end
+
+  defp toggle_status do
+    JS.toggle(to: "#admin-sidebar-status-list")
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "#admin-sidebar-status-card")
+  end
+
+  defp close_status do
+    JS.hide(to: "#admin-sidebar-status-list")
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "#admin-sidebar-status-card")
+  end
+
+  attr :line, :map, required: true
+
+  defp status_line(%{line: %{link: link}} = assigns) when is_binary(link) do
+    ~H"""
+    <.link
+      navigate={@line.link}
+      id={dom_id("admin-sidebar-status-line", @line.id)}
+      data-level={@line.level}
+      class="flex items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f] no-underline hover:bg-[#f6f5f2] max-[980px]:min-h-11"
+    >
+      <span class={["size-2 shrink-0 rounded-full", card_tone(@line.level).dot]}></span>
+      <span class="min-w-0 flex-1 truncate">{@line.label}</span>
+      <.icon name="hero-arrow-right" class="size-3.5 shrink-0 text-[#a8a5a0]" />
+    </.link>
+    """
+  end
+
+  defp status_line(assigns) do
+    ~H"""
+    <div
+      id={dom_id("admin-sidebar-status-line", @line.id)}
+      data-level={@line.level}
+      class="flex items-center gap-2 px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f]"
+    >
+      <span class={["size-2 shrink-0 rounded-full", card_tone(@line.level).dot]}></span>
+      <span class="min-w-0 flex-1 truncate">{@line.label}</span>
+    </div>
+    """
+  end
+
   attr :item, :map, required: true
   attr :trail, :list, default: []
   attr :counts, :map, default: %{}
   attr :nested, :boolean, default: false
 
   defp nav_link(assigns) do
-    assigns = assign(assigns, :panel, dom_id("sbi", assigns.item.key))
+    assigns =
+      assign(assigns,
+        panel: dom_id("sbi", assigns.item.key),
+        lit: lit?(mark(assigns.item, assigns.trail), assigns.nested)
+      )
 
     ~H"""
     <div :if={@item.children != []}>
-      <div class="flex items-center gap-0.5">
-        <.entry_link item={@item} trail={@trail} counts={@counts} nested={@nested} />
+      <div class={["flex items-center gap-0.5 rounded-[10px]", @lit && "bg-[#f2f1fc]"]}>
+        <.entry_link item={@item} trail={@trail} counts={@counts} nested={@nested} fold={@panel} />
         <button
           type="button"
           data-fold
@@ -337,7 +579,10 @@ defmodule MishkaCmsCore.Layouts do
           aria-expanded={to_string(@item.key in @trail)}
           aria-label={gettext("Show or hide the entries under %{label}", label: label(@item.label))}
           phx-click={fold(@panel)}
-          class="group flex size-[30px] shrink-0 items-center justify-center rounded-[8px] text-[#a8a5a0] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+          class={[
+            "group flex size-[30px] shrink-0 items-center justify-center rounded-[8px] hover:bg-[#f6f5f2] hover:text-[#1b1a18]",
+            (@lit && "text-[#4f4bcc]") || "text-[#a8a5a0]"
+          ]}
         >
           <.icon
             name="hero-chevron-down"
@@ -369,20 +614,23 @@ defmodule MishkaCmsCore.Layouts do
   attr :trail, :list, default: []
   attr :counts, :map, default: %{}
   attr :nested, :boolean, default: false
+  attr :fold, :string, default: nil
   attr :class, :string, default: "py-[9px] text-[13px] max-[980px]:min-h-12"
 
   defp entry_link(assigns) do
-    assigns = assign(assigns, mark: mark(assigns.item, assigns.trail))
+    mark = mark(assigns.item, assigns.trail)
+    assigns = assign(assigns, mark: mark, lit: lit?(mark, assigns.nested))
 
     ~H"""
     <.link
-      navigate={@item.path}
+      navigate={entry_path(@item, @counts)}
       aria-current={@mark}
+      phx-click={@fold && fold_parent(@fold)}
       class={[
         "flex min-w-0 flex-1 items-center gap-3 rounded-[10px] px-[10px] transition-colors",
         @class,
-        @mark == "page" && "bg-[#f2f1fc] font-bold text-[#4f4bcc]",
-        @mark == "true" && "font-bold text-[#1b1a18] hover:bg-[#f6f5f2]",
+        @lit && "bg-[#f2f1fc] font-bold text-[#4f4bcc]",
+        @mark == "true" && @nested && "font-bold text-[#1b1a18] hover:bg-[#f6f5f2]",
         !@mark && "font-semibold text-[#5c5a54] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
       ]}
     >
@@ -390,17 +638,39 @@ defmodule MishkaCmsCore.Layouts do
         :if={!@nested}
         class={[
           "flex size-[26px] shrink-0 items-center justify-center rounded-[8px]",
-          @mark == "page" && "bg-[#e4e2f7] text-[#5b57d6]",
-          @mark == "true" && "text-[#5b57d6]"
+          @lit && "bg-[#e4e2f7] text-[#5b57d6]"
         ]}
       >
         <.icon name={@item.icon} class="size-4" />
       </span>
+      <span
+        :if={@nested}
+        data-dot
+        class={[
+          "size-[5px] shrink-0 rounded-full",
+          (@mark && "bg-[#5b57d6]") || "bg-[#cfcdc6]"
+        ]}
+      ></span>
       <span class="min-w-0 flex-1 truncate">{label(@item.label)}</span>
-      <.count_chip key={@item.key} count={@counts[@item.key]} />
+      <.count_chip
+        key={@item.key}
+        count={@counts[@item.key]}
+        label={@item.count_label && label(@item.count_label)}
+      />
     </.link>
     """
   end
+
+  # An entry showing a number opens where that number is listed (`count_path`), else its page.
+  defp entry_path(%{count_path: count_path, key: key} = item, counts)
+       when is_binary(count_path) do
+    case counts[key] do
+      {number, _tone} when is_integer(number) and number > 0 -> count_path
+      _none -> item.path
+    end
+  end
+
+  defp entry_path(item, _counts), do: item.path
 
   attr :item, :map, required: true
   attr :from, :string, required: true
@@ -426,6 +696,7 @@ defmodule MishkaCmsCore.Layouts do
 
   attr :key, :string, required: true
   attr :count, :any, default: nil
+  attr :label, :string, default: nil, doc: "what the number counts, the item's `count_label`"
 
   defp count_chip(%{count: {number, tone}} = assigns) when is_integer(number) and number > 0 do
     assigns = assign(assigns, number: number, tone: tone)
@@ -433,6 +704,8 @@ defmodule MishkaCmsCore.Layouts do
     ~H"""
     <span
       data-count={@key}
+      title={@label && "#{@number} #{@label}"}
+      aria-label={@label && "#{@number} #{@label}"}
       class={[
         "shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-bold leading-[16px]",
         (@tone == :attention && "bg-[#fbf1df] text-[#cf8a24]") || "bg-[#eeedfb] text-[#5b57d6]"
@@ -449,12 +722,41 @@ defmodule MishkaCmsCore.Layouts do
   The admin topbar — search, theme toggle, notifications, and the user's menu: Account settings, the
   language the dashboard is read in, and Sign out.
 
+  The search box is `MishkaCmsCore.Layouts.TopbarSearch.Combo`, which lists what extensions find on
+  the `"topbar:search"` event (`MishkaCmsCore.Layouts.TopbarSearch`); `placeholder` is what an
+  extension says it searches on that page, `nil` for the core's own.
+
   `language` is the admin's language and `languages` the ones the menu offers
   (`MishkaCmsCore.Layouts.Nav` assigns both); picking one sends `PUT /admin/language` with
   `current_path` to come back to. Two are listed, the admin's own among them, and the rest behind
   "Show more".
+
+  `items` is `@topbar_items`, what extensions add on the `"topbar:items"` event
+  (`MishkaCmsCore.Layouts.TopbarItems`). They are drawn in order at the right, before the theme
+  toggle, in `#admin-topbar-items`, each with `current_user`, `current_site`, `current_path` and `view`; with
+  none, the slot is not drawn. `current_site` and `view` are for these items and the search box. Below
+  640px only an item that sets `phone: true` stays (a site switcher a person needs everywhere), and it
+  draws itself small enough for the phone's bar.
+
+  `needs` is `@topbar_needs`, the bell's "What needs you" items (`MishkaCmsCore.Layouts.TopbarNeeds`),
+  listed above the notifications under one folding header per group (`TopbarNeeds.groups/1`), each
+  opening its link. The bell's badge adds their counts to
+  `notification_count`, the unread notifications.
+
+  Below 640px the bar is the phone's, 60px tall: the menu button, the page's heading and the bell
+  (with the user's menu, so Sign out stays in reach). `section` is `@topbar_section`
+  (`MishkaCmsCore.Sidebar.section/1`): its `eyebrow` is drawn small above its `title`, "Admin
+  console" and "MishkaCMS" where the sidebar names neither. The search box, the extensions' items
+  and the theme toggle are not drawn there.
   """
   attr :current_user, :any, default: nil
+  attr :current_site, :any, default: nil
+  attr :view, :atom, default: nil
+  attr :items, :list, default: []
+  attr :status, :list, default: [], doc: "`@topbar_status`, `MishkaCmsCore.Layouts.TopbarStatus`"
+  attr :needs, :list, default: []
+  attr :section, :map, default: nil
+  attr :placeholder, :string, default: nil
   attr :notification_count, :integer, default: 0
   attr :notification_recent, :list, default: []
   attr :current_path, :string, default: nil
@@ -464,43 +766,152 @@ defmodule MishkaCmsCore.Layouts do
 
   def topbar(assigns) do
     {shown, more} = split_languages(assigns.languages, assigns.language)
-    assigns = assign(assigns, shown_languages: shown, more_languages: more)
+
+    assigns =
+      assign(assigns,
+        shown_languages: shown,
+        more_languages: more,
+        bell_count: assigns.notification_count + TopbarNeeds.total(assigns.needs),
+        status_level: TopbarStatus.level(assigns.status),
+        section: assigns.section || %{eyebrow: nil, title: nil}
+      )
 
     ~H"""
-    <header class="relative z-40 flex h-[66px] flex-none items-center gap-4 border-b border-[#ecebe6] bg-white/80 px-7 backdrop-blur-[10px] max-[560px]:gap-2.5! max-[560px]:px-[14px]!">
+    <header class="relative z-40 flex h-[66px] flex-none items-center gap-4 border-b border-[#ecebe6] bg-white/80 px-7 backdrop-blur-[10px] max-[560px]:gap-2.5! max-[560px]:px-[14px]! max-[640px]:h-[60px]! max-[640px]:gap-2! max-[640px]:bg-white! max-[640px]:px-3!">
       <button
         type="button"
+        id="admin-menu-button"
+        aria-label={gettext("Open menu")}
         phx-click={
           JS.add_class("max-[980px]:translate-x-0!", to: "#admin-sidebar")
           |> JS.show(to: "#admin-nav-overlay")
         }
         title={gettext("Open menu")}
-        class="hidden size-[39px] shrink-0 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[980px]:flex!"
+        class={[
+          "hidden size-[39px] shrink-0 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[980px]:flex!",
+          phone_button()
+        ]}
       >
         <.icon name="hero-bars-3" class="size-[18px]" />
       </button>
 
-      <div class="relative min-w-0 flex-1 max-w-[440px]">
-        <.icon
-          name="hero-magnifying-glass"
-          class="absolute start-[13px] top-1/2 size-4 -translate-y-1/2 text-[#a8a5a0]"
-        />
-        <input
-          type="text"
-          placeholder={gettext("Search pages, posts, people…")}
-          class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none"
-        />
+      <div id="admin-phone-section" class="hidden min-w-0 flex-1 max-[640px]:block!">
+        <div
+          data-role="eyebrow"
+          class="truncate text-[10.5px] font-bold uppercase tracking-[0.08em] text-[#4f4bcc]"
+        >
+          {(@section.eyebrow && label(@section.eyebrow)) || gettext("Admin console")}
+        </div>
+        <div
+          data-role="title"
+          class="line-clamp-2 break-words font-['Space_Grotesk'] text-[17px] font-semibold leading-[1.15] text-[#17161a]"
+        >
+          {(@section.title && label(@section.title)) || "MishkaCMS"}
+        </div>
       </div>
 
-      <div class="flex-1"></div>
+      <.live_component
+        module={TopbarSearch.Combo}
+        id="admin-topbar-search"
+        current_user={@current_user}
+        current_site={@current_site}
+        current_path={@current_path}
+        placeholder={@placeholder}
+        view={@view}
+      />
 
-      <div class="relative flex shrink-0 items-center gap-[11px]">
+      <div class="flex-1 max-[640px]:hidden"></div>
+
+      <div class="relative flex shrink-0 items-center gap-[11px] max-[640px]:gap-2">
+        <div
+          :if={@items != []}
+          id="admin-topbar-items"
+          class={[
+            "flex shrink-0 items-center gap-[11px]",
+            !Enum.any?(@items, & &1[:phone]) && "max-[640px]:hidden!"
+          ]}
+        >
+          <div
+            :for={item <- @items}
+            id={dom_id("topbar-item", item.id)}
+            class={["flex items-center", !item[:phone] && "max-[640px]:hidden!"]}
+          >
+            <.live_component
+              :if={item[:module]}
+              module={item.module}
+              id={item.id}
+              current_user={@current_user}
+              current_site={@current_site}
+              current_path={@current_path}
+              view={@view}
+            />
+            {if render = item[:render],
+              do:
+                render.(%{
+                  id: item.id,
+                  current_user: @current_user,
+                  current_site: @current_site,
+                  current_path: @current_path,
+                  view: @view
+                })}
+          </div>
+        </div>
+
+        <div :if={@status != []} class="relative">
+          <button
+            type="button"
+            id="topbar-status"
+            data-level={@status_level}
+            aria-label={gettext("Status of this site")}
+            aria-controls="topbar-status-panel"
+            phx-click={JS.toggle(to: "#topbar-status-panel")}
+            class={[
+              "flex h-[39px] items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-bold text-[#3a382f] hover:bg-[#f7f6f3]",
+              phone_button()
+            ]}
+          >
+            <span class={["size-2 shrink-0 rounded-full", status_dot(@status_level)]}></span>
+            <span class="max-[640px]:sr-only">{status_word(@status_level)}</span>
+          </button>
+          <div
+            id="topbar-status-panel"
+            role="dialog"
+            aria-label={gettext("Status of this site")}
+            phx-click-away={JS.hide(to: "#topbar-status-panel")}
+            phx-window-keydown={JS.hide(to: "#topbar-status-panel")}
+            phx-key="Escape"
+            class="absolute end-0 top-[46px] z-[60] hidden w-[320px] max-w-[calc(100vw-1.5rem)] rounded-[14px] border border-[#ecebe6] bg-white p-2 shadow-[0_14px_34px_rgba(30,28,24,0.14)]"
+          >
+            <div
+              :for={line <- @status}
+              id={dom_id("topbar-status-line", line.id)}
+              data-level={line.level}
+              class="flex items-start gap-2.5 rounded-[10px] px-2.5 py-2"
+            >
+              <span class={["mt-[5px] size-2 shrink-0 rounded-full", status_dot(line.level)]}></span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-[12.5px] font-bold text-[#17161a]">{line.label}</span>
+                <span :if={line.detail} class="block text-[11.5px] font-medium text-[#6f6d68]">
+                  {line.detail}
+                </span>
+                <.link
+                  :if={line.link}
+                  navigate={line.link}
+                  class="mt-1 inline-flex min-h-11 items-center text-[12px] font-bold text-[#4f4bcc] min-[641px]:min-h-0"
+                >
+                  {gettext("Open")}
+                </.link>
+              </span>
+            </div>
+          </div>
+        </div>
+
         <button
           type="button"
           phx-click={JS.dispatch("phx:set-theme")}
           data-phx-theme="dark"
           title={gettext("Switch to dark")}
-          class="flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:hidden"
+          class="flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:hidden max-[640px]:hidden!"
         >
           <.icon name="hero-moon" class="size-[17px]" />
         </button>
@@ -509,7 +920,7 @@ defmodule MishkaCmsCore.Layouts do
           phx-click={JS.dispatch("phx:set-theme")}
           data-phx-theme="light"
           title={gettext("Switch to light")}
-          class="hidden size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:flex"
+          class="hidden size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:flex max-[640px]:hidden!"
         >
           <.icon name="hero-sun" class="size-[17px] text-[#c8931f]" />
         </button>
@@ -517,22 +928,40 @@ defmodule MishkaCmsCore.Layouts do
         <div>
           <button
             type="button"
+            id="topbar-bell"
+            aria-label={gettext("What needs you")}
             phx-click={JS.toggle(to: "#topbar-notifs")}
-            class="relative flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3]"
+            class={[
+              "relative flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3]",
+              phone_button()
+            ]}
           >
             <.icon name="hero-bell" class="size-[17px]" />
             <span
-              :if={@notification_count > 0}
-              class="absolute -end-[5px] -top-[5px] flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-2 border-white bg-[#5b57d6] px-1 text-[9.5px] font-bold text-white"
+              :if={@bell_count > 0}
+              data-bell-count={@bell_count}
+              class="absolute -end-[5px] -top-[5px] flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-2 border-white bg-[#5b57d6] px-1 text-[9.5px] font-bold text-white max-[640px]:end-[3px]! max-[640px]:top-[3px]! max-[640px]:h-4! max-[640px]:min-w-4! max-[640px]:border-0!"
             >
-              {if @notification_count > 9, do: "9+", else: @notification_count}
+              {if @bell_count > 9, do: "9+", else: @bell_count}
             </span>
           </button>
           <div
             id="topbar-notifs"
             phx-click-away={JS.hide(to: "#topbar-notifs")}
-            class="absolute end-0 top-[52px] z-[60] hidden w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_18px_44px_rgba(30,28,24,0.16)]"
+            class="absolute end-0 top-[52px] z-[60] hidden w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_18px_44px_rgba(30,28,24,0.16)]"
           >
+            <div
+              :if={@needs != []}
+              id="topbar-needs"
+              phx-hook="RememberFolds"
+              class="border-b border-[#f0efea] p-2"
+            >
+              <div class="px-2 pb-1.5 pt-1.5 font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
+                {gettext("What needs you")}
+              </div>
+              <.need_group :for={group <- TopbarNeeds.groups(@needs)} group={group} />
+            </div>
+
             <div class="flex items-center justify-between gap-2 border-b border-[#f0efea] px-4 py-[15px]">
               <span class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
                 {gettext("Notifications")}
@@ -642,6 +1071,8 @@ defmodule MishkaCmsCore.Layouts do
         <div class="relative">
           <button
             type="button"
+            id="topbar-user-button"
+            aria-haspopup="menu"
             phx-click={JS.toggle(to: "#topbar-user")}
             class="flex items-center gap-2.5 rounded-[30px] border border-[#ecebe6] bg-white py-1 ps-1 pe-3 hover:bg-[#f7f6f3]"
           >
@@ -654,7 +1085,6 @@ defmodule MishkaCmsCore.Layouts do
             >
               {user_email(@current_user)}
             </span>
-            <.icon name="hero-chevron-down" class="size-[14px] text-[#a8a5a0]" />
           </button>
           <div
             id="topbar-user"
@@ -734,6 +1164,94 @@ defmodule MishkaCmsCore.Layouts do
     """
   end
 
+  attr :group, :map, required: true
+
+  # One extension's items under a header with their total; the header folds the list, which starts
+  # open, and `RememberFolds` keeps the fold across pages as the sidebar keeps its groups.
+  defp need_group(assigns) do
+    assigns = assign(assigns, :panel, dom_id("topbar-needs", assigns.group.id))
+
+    ~H"""
+    <div>
+      <button
+        type="button"
+        data-fold
+        aria-expanded="true"
+        aria-controls={@panel}
+        phx-click={fold(@panel)}
+        class="group flex min-h-11 w-full items-center gap-2 rounded-[10px] px-2.5 py-1 text-start hover:bg-[#faf9f6] min-[641px]:min-h-0"
+      >
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]">
+          {@group.label}
+        </span>
+        <span class="h-px flex-1 bg-[#e6e4de]"></span>
+        <span
+          data-group-count={@group.count}
+          class="shrink-0 rounded-full bg-[#f0efea] px-1.5 py-px text-[10.5px] font-bold leading-[16px] text-[#5c5a54]"
+        >
+          {@group.count}
+        </span>
+        <.icon
+          name="hero-chevron-down"
+          class="size-[13px] text-[#c2bfb6] transition-transform group-aria-expanded:rotate-180"
+        />
+      </button>
+      <div id={@panel}>
+        <.need_row :for={need <- @group.needs} need={need} />
+      </div>
+    </div>
+    """
+  end
+
+  attr :need, :map, required: true
+
+  # A row with a link navigates live, as `<.link navigate>` does; a row without one is not a link.
+  defp need_row(assigns) do
+    assigns = assign(assigns, :opens, opens(assigns.need.link))
+
+    ~H"""
+    <.dynamic_tag
+      tag_name={(@need.link && "a") || "div"}
+      id={dom_id("topbar-need", @need.id)}
+      data-tone={@need.tone}
+      {@opens}
+      class={[
+        "flex min-h-11 items-start gap-2.5 rounded-[10px] px-2.5 py-2 text-start min-[641px]:min-h-0",
+        @need.link && "hover:bg-[#faf9f6]"
+      ]}
+    >
+      <span class={["mt-[5px] size-2 shrink-0 rounded-full", need_dot(@need.tone)]}></span>
+      <span class="min-w-0 flex-1">
+        <span class="block text-[12.5px] font-bold text-[#17161a]">{@need.title}</span>
+        <span :if={@need.detail} class="block text-[11px] font-medium text-[#6f6d68]">
+          {@need.detail}
+        </span>
+      </span>
+      <span class={[
+        "shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-bold leading-[16px]",
+        notif_chip_class(@need.tone)
+      ]}>
+        {@need.count}
+      </span>
+    </.dynamic_tag>
+    """
+  end
+
+  defp opens(nil), do: %{}
+
+  defp opens(link),
+    do: %{"href" => link, "data-phx-link" => "redirect", "data-phx-link-state" => "push"}
+
+  # The menu button and the bell on a phone: 44px, borderless, on the page's own grey.
+  defp phone_button,
+    do:
+      "max-[640px]:size-11! max-[640px]:rounded-[12px]! max-[640px]:border-0! max-[640px]:bg-[#f6f5f2]! max-[640px]:text-[#3a382f]!"
+
+  defp need_dot(:error), do: "bg-[#d5544b]"
+  defp need_dot(:warn), do: "bg-[#e0a23a]"
+  defp need_dot(:success), do: "bg-[#1f9d6b]"
+  defp need_dot(_info), do: "bg-[#5b57d6]"
+
   @first_year 2026
   @default_credit %{name: "Mishka CMS", url: "https://mishka.tools/cms"}
 
@@ -792,9 +1310,13 @@ defmodule MishkaCmsCore.Layouts do
 
   `credit` is `%{name: name, url: url}` — what `MishkaCmsCore.Layouts.Nav` assigns as
   `@footer_credit` from the extension that owns the page — or `nil` on the core's own pages, which
-  credit Mishka CMS. Only "Powered by" is translated; a product name is not.
+  credit Mishka CMS. Only "Powered by" is translated; a product name is not. With `shown` false (an
+  extension that draws no such line, `MishkaCmsCore.Sidebar.footer?/1`) nothing is drawn.
   """
   attr :credit, :map, default: nil
+  attr :shown, :boolean, default: true
+
+  def footer_credit(%{shown: false} = assigns), do: ~H""
 
   def footer_credit(assigns) do
     assigns = assign(assigns, :credit, assigns.credit || @default_credit)
@@ -828,7 +1350,20 @@ defmodule MishkaCmsCore.Layouts do
   def copyright_years(%Date{year: year}), do: "#{@first_year}-#{year}"
 
   # A sidebar label is marked with `gettext_noop/1` where it is declared, at compile time.
+  # The dot and the word of the top bar's status chip, by the worst line's level.
+  defp status_dot(:error), do: "bg-[#c0392b]"
+  defp status_dot(:warn), do: "bg-[#c8931f]"
+  defp status_dot(_ok), do: "bg-[#1f9d6b]"
+
+  defp status_word(:error), do: gettext("Needs a look")
+  defp status_word(:warn), do: gettext("Heads up")
+  defp status_word(_ok), do: gettext("All good")
+
   defp label(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
+
+  # A top group of the sidebar starts open only when it holds the page that is open (its key is in
+  # the trail), so the menu shows where the person is and folds the rest; a press opens any of them.
+  defp group_open?(%{items: items}, trail), do: Enum.any?(items, &(&1.key in trail))
 
   defp group?(%Group{}), do: true
   defp group?(_entry), do: false
@@ -858,9 +1393,22 @@ defmodule MishkaCmsCore.Layouts do
     end
   end
 
+  # The row drawn in the open page's colours: the entry of the page, and the top row holding it, as
+  # the design highlights the parent while one of its children is open.
+  defp lit?("page", _nested), do: true
+  defp lit?("true", false), do: true
+  defp lit?(_mark, _nested), do: false
+
   defp fold(id) do
     JS.toggle_class("hidden", to: "#" <> id)
     |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+  end
+
+  # The entry's own link folds its branch as the arrow does, then opens its page: where the page is
+  # the open one, a second click closes the branch again.
+  defp fold_parent(panel) do
+    JS.toggle_class("hidden", to: "#" <> panel)
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "[aria-controls='#{panel}']")
   end
 
   defp swap(from, to) do

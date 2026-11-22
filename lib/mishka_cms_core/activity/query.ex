@@ -71,6 +71,7 @@ defmodule MishkaCmsCore.Activity.Query do
   ]
 
   @oban_table "oban_jobs"
+  @skipped_job "COALESCE(meta, '{}'::jsonb) ? 'skipped'"
   # The `source` values the core's own branches write, which no union source may answer to.
   @core_sources ~w(version event draft job)
   @warn_actions "'destroy','master_destroy','permanent_destroy','master_permanent_destroy'"
@@ -86,7 +87,9 @@ defmodule MishkaCmsCore.Activity.Query do
     * `:site_id`  — the one site to read; `nil` reads every site, which only a master's reach
       asks for (`MishkaCmsCore.Activity.Helpers.reach/1`)
     * `:kind`     — `"content"` | `"job"` | `nil`
-    * `:severity` — `"info"` | `"warn"` | `"error"` | `nil`
+    * `:severity` — `"info"` | `"warn"` | `"error"` | `"skipped"` | `nil`; `"error"` is the failed jobs
+      no admin skipped, `"skipped"` the skipped ones (`MishkaCmsCore.Skip`), which only the core's
+      job branch answers
     * `:resources` — `:all` (the default) or the `"Elixir.Module"` strings whose entries are shown,
       as `MishkaCmsCore.Activity.Helpers.resources_for/1` answers for a viewer
     * `:limit`    — page size (Ash sets this to `page_size + 1` so `more?` works)
@@ -113,8 +116,9 @@ defmodule MishkaCmsCore.Activity.Query do
   def max_cap, do: @max_cap
 
   @doc """
-  How many entries `page/1` has to show, as `%{total: n, info: n, warn: n, error: n}` — the log's KPI
-  row and its "showing 1–20 of N" label.
+  How many entries `page/1` has to show, as `%{total: n, info: n, warn: n, error: n, skipped: n}` —
+  the log's KPI row and its "showing 1–20 of N" label. A skipped job (`MishkaCmsCore.Skip`) counts
+  under `skipped`, never under `error`.
 
   Takes the same opts as `page/1` minus `:severity`, `:limit` and `:offset`: each figure is a COUNT
   over the very same UNION, so a count always agrees with the list beside it. Like `page/1`, every
@@ -124,7 +128,8 @@ defmodule MishkaCmsCore.Activity.Query do
           total: non_neg_integer(),
           info: non_neg_integer(),
           warn: non_neg_integer(),
-          error: non_neg_integer()
+          error: non_neg_integer(),
+          skipped: non_neg_integer()
         }
   def counts(opts \\ %{}) do
     site_id = Map.get(opts, :site_id)
@@ -134,7 +139,7 @@ defmodule MishkaCmsCore.Activity.Query do
     shown = shown(opts)
     sources = UnionSource.all()
 
-    %{total: nil, info: "info", warn: "warn", error: "error"}
+    %{total: nil, info: "info", warn: "warn", error: "error", skipped: "skipped"}
     |> Map.new(fn {key, severity} ->
       {key,
        site_id
@@ -284,8 +289,11 @@ defmodule MishkaCmsCore.Activity.Query do
   # THE BRANCHES OF ONE READ, with what the query needs beside them: `params`, the union sources'
   # own parameters, which follow the shared ones, and `sources`, the source behind each `source`
   # value a row can come back with.
+  #
+  # A Skipped read is the core's jobs alone: no content row is skipped, and a union source is not
+  # asked, because its branch knows only the severities `UnionSource` names.
   defp branches(site_id, kind, severity, shown, union_sources) do
-    content? = kind in [nil, "content"]
+    content? = kind in [nil, "content"] and severity != "skipped"
 
     union =
       if content?,
@@ -491,15 +499,17 @@ defmodule MishkaCmsCore.Activity.Query do
     [
       """
       (SELECT 'job' AS source, worker::text AS resource,
-              state::text AS action,
+              (CASE WHEN #{@skipped_job} THEN 'skipped' ELSE state::text END) AS action,
               id::text AS source_id,
               id::text AS event_id,
               #{site_expr} AS site_id,
               #{actor_expr} AS user_id,
               COALESCE(completed_at, discarded_at, inserted_at) AS inserted_at,
-              args AS payload
+              (CASE WHEN #{@skipped_job}
+                    THEN args || jsonb_build_object('#{Oban.skip_key()}', meta->'skipped')
+                    ELSE args END) AS payload
          FROM #{@oban_table}
-        WHERE state::text IN (#{oban_states(severity)})#{site_text_clause(site_id, site_expr)}#{resource_clause("('Elixir.' || (args->>'resource'))")}#{shown_clause("('Elixir.' || (args->>'resource'))", shown)}#{search_clause(["worker::text", "args::text"])}
+        WHERE #{oban_states(severity)}#{site_text_clause(site_id, site_expr)}#{resource_clause("('Elixir.' || (args->>'resource'))")}#{shown_clause("('Elixir.' || (args->>'resource'))", shown)}#{search_clause(["worker::text", "args::text"])}
         ORDER BY COALESCE(completed_at, discarded_at, inserted_at) DESC
         LIMIT $1)\
       """
@@ -692,11 +702,16 @@ defmodule MishkaCmsCore.Activity.Query do
   # that slips past the normalize_filters whitelist can never raise here.
   def content_severity_clause(_severity, _column), do: ""
 
-  defp oban_states("info"), do: "'completed'"
-  defp oban_states("warn"), do: "'retryable'"
-  defp oban_states("error"), do: "'discarded'"
+  # The jobs of each severity. A job an admin skipped carries `meta.skipped`: it is a Skipped row,
+  # whether the skip cancelled it or it had already been given up on, and never an Error one.
+  defp oban_states("info"), do: "state::text = 'completed'"
+  defp oban_states("warn"), do: "state::text = 'retryable' AND NOT #{@skipped_job}"
+  defp oban_states("error"), do: "state::text = 'discarded' AND NOT #{@skipped_job}"
+  defp oban_states("skipped"), do: "state::text IN ('discarded','cancelled') AND #{@skipped_job}"
   # Catch-all (incl. nil) → all job states.
-  defp oban_states(_severity), do: "'completed','discarded','retryable'"
+  defp oban_states(_severity),
+    do:
+      "(state::text IN ('completed','discarded','retryable') OR (state::text = 'cancelled' AND #{@skipped_job}))"
 
   defp version_resource(resource), do: AshPaperTrail.Resource.Info.version_resource(resource)
 

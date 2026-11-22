@@ -13,14 +13,16 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   of date inputs — so the resource stays the single source of truth and no filter is named here.
 
   Row content comes from each column's `render`, mapped by position: 0 the event (message + badge),
-  1 the actor, 2 the date, 3+ inline badges.
+  1 the actor, 2 the date, 3+ inline badges. The resource's `row_actions` a row may show (their
+  `visible` rule) are drawn by gervaz at the end of the actor line.
 
   ## What a resource has to give it
 
   Columns and filters are read off the resource, but three things come from the record itself:
 
-    * `:severity` — an atom field (`:info`, `:warn`, `:error`) tinting the node and the actor avatar
-      of a row that carries no `:tone`; an unknown or unloaded one renders the `:info` tint.
+    * `:severity` — an atom field (`:info`, `:warn`, `:error`, `:skipped`) tinting the node and the
+      actor avatar of a row that carries no `:tone`; an unknown or unloaded one renders the `:info`
+      tint.
     * `:tone` — an optional atom field (`:created`, `:updated`, `:destroyed`) a content-change row
       carries. When present it tints the node and the actor avatar by action rather than severity, so
       a create reads green, an update blue and a destroy red; a row without one (a job, a compile, a
@@ -347,6 +349,13 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
       |> assign(:first_of_day?, day_mark(assigns.record, :first_of_day?))
       |> assign(:day_label, day_label(Map.get(assigns.record, options[:timestamp])))
       |> assign(:day_count, event_count(day_mark(assigns.record, :day_count), options[:max_cap]))
+      |> assign(
+        :row_actions,
+        Enum.filter(
+          Shared.non_accordion_actions(assigns.static.row_actions || []),
+          &Shared.action_visible?(&1, assigns.record, assigns.state)
+        )
+      )
 
     ~H"""
     <div id={@id}>
@@ -387,6 +396,15 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
             </div>
             <div :for={column <- @extra_columns}>
               <Shared.render_cell column={column} record={@record} static={@static} state={@state} />
+            </div>
+            <div :if={@row_actions != []} data-role="row-actions" class="ms-1">
+              <Shared.render_row_actions
+                row_actions={@row_actions}
+                record={@record}
+                static={@static}
+                state={@state}
+                myself={@myself}
+              />
             </div>
           </div>
         </div>
@@ -463,9 +481,9 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   defp tone_of(_record), do: nil
 
   @doc """
-  The dot colour for one palette value — a `:severity` (`:info`/`:warn`/`:error`), a content-change
-  `:tone` (`:created`/`:updated`/`:destroyed`), or an action filter's raw value (`create`/`update`/
-  `destroy`, which resolve to their tone's colour). The node is a tinted disc (`node_class/1`) around
+  The dot colour for one palette value — a `:severity` (`:info`/`:warn`/`:error`/`:skipped`), a
+  content-change `:tone` (`:created`/`:updated`/`:destroyed`), or an action filter's raw value
+  (`create`/`update`/`destroy`, which resolve to their tone's colour). The node is a tinted disc (`node_class/1`) around
   this solid dot; the filter switch reuses it for its per-option dots. An unknown value renders no
   dot rather than guess. Accepts the atom or its string form.
   """
@@ -476,6 +494,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   def dot_class("info"), do: "bg-[#1f9d6b]"
   def dot_class("warn"), do: "bg-[#cf8a24]"
   def dot_class("error"), do: "bg-[#d5544b]"
+  def dot_class("skipped"), do: "bg-[#a8a5a0]"
   def dot_class("created"), do: "bg-[#1f9d6b]"
   def dot_class("updated"), do: "bg-[#2f86c4]"
   def dot_class("destroyed"), do: "bg-[#d5544b]"
@@ -498,6 +517,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
 
   def node_class("warn"), do: "bg-[#fbf1df]"
   def node_class("error"), do: "bg-[#fbe9e7]"
+  def node_class("skipped"), do: "bg-[#f0efea]"
   def node_class("updated"), do: "bg-[#e6f1fa]"
   def node_class("destroyed"), do: "bg-[#fbe9e7]"
   def node_class(_value), do: "bg-[#e6f6ee]"
@@ -517,6 +537,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
 
   def avatar_tone_class("warn"), do: "bg-[#fbf1df] text-[#cf8a24]"
   def avatar_tone_class("error"), do: "bg-[#fbe9e7] text-[#d5544b]"
+  def avatar_tone_class("skipped"), do: "bg-[#f0efea] text-[#8a877f]"
   def avatar_tone_class("updated"), do: "bg-[#e6f1fa] text-[#2f86c4]"
   def avatar_tone_class("destroyed"), do: "bg-[#fbe9e7] text-[#d5544b]"
   def avatar_tone_class(_value), do: "bg-[#e6f6ee] text-[#1f9d6b]"
