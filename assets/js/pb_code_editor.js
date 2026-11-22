@@ -95,6 +95,9 @@ export const PbCodeEditor = {
     this.watch = () => this.mark(textarea.value);
     textarea.addEventListener("input", this.watch);
 
+    // The pane outlives its boxes: an Apply brings a new one, and the pane still says the last was typed in.
+    this.mark(this.pristine);
+
     // ⌘↵ APPLIES, because the button is in a header and the cursor is not. Somebody forty lines into
     // a document has no reason to look up at a pane title, and the first report of this feature was
     // "I changed it and nothing happened" from someone who had typed the change and never pressed

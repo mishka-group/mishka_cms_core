@@ -186,3 +186,45 @@ describe("a box the server focuses", () => {
     expect(el.scrollIntoView).not.toHaveBeenCalled();
   });
 });
+
+// THE PANE OUTLIVES THE BOX. A new text, after an Apply or with another element selected, is a new
+// box in the same pane, and the pane keeps the `data-dirty` the box before it set.
+describe("a box mounted in a pane", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  function box(pane, text) {
+    pane.innerHTML = `<form><div id="box-${text}"><textarea>${text}</textarea></div></form>`;
+
+    return pane.querySelector("div");
+  }
+
+  async function mount(el) {
+    const { PbCodeEditor } = await loader();
+    const hook = Object.assign(Object.create(PbCodeEditor), { el });
+
+    window.PbCodeMirror = { create: () => ({ destroy: () => {} }) };
+    hook.mounted();
+
+    return hook;
+  }
+
+  test("has nothing to apply until something is typed in it", async () => {
+    const pane = document.createElement("div");
+    pane.dataset.pane = "heex";
+    document.body.appendChild(pane);
+
+    const before = await mount(box(pane, "before"));
+    const typed = pane.querySelector("textarea");
+    typed.value = "after";
+    typed.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(pane.dataset.dirty).toBe("true");
+
+    // The server's answer to the apply: a box of its own for the new text.
+    before.destroyed();
+    await mount(box(pane, "after"));
+
+    expect(pane.hasAttribute("data-dirty")).toBe(false);
+  });
+});
