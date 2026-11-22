@@ -152,6 +152,28 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
            ]
   end
 
+  test "a second entry for a status is named as soon as its status is picked", %{
+    conn: conn,
+    row: row
+  } do
+    view = edit(conn, row)
+    form = form_id(view)
+
+    view
+    |> element("##{form} button[phx-click='add_nested'][phx-value-field='error_pages']")
+    |> render_click()
+
+    html =
+      view
+      |> element("##{form}")
+      |> render_change(%{
+        "_target" => ["form", "error_pages", "2", "status"],
+        "form" => %{"error_pages" => %{"2" => %{"status" => "404"}}}
+      })
+
+    assert html =~ "Entry 3 is a second 404 page"
+  end
+
   test "the list shows the default entry among the row's codes", %{conn: conn, row: row} do
     update!(row, [
       %{status: :default, template: "<p>Went wrong</p>"},
