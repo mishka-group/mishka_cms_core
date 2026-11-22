@@ -663,16 +663,29 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   Parse the Code-tab's serialized error pages (`<!-- 404 -->`-delimited blocks, `<!-- offline -->`
   for the offline page and `<!-- default -->` for the default one, as produced by `source/1`) back
   into the `error_pages` collection (`[%{status, template}]`). Used when saving an `ErrorPageDraft` from the editor.
+
+  The text holds the templates alone, so an entry keeps the `:layout` that `entries`, the collection
+  the text was written from, holds for its status.
   """
-  def parse_error_pages(text) when is_binary(text) do
+  def parse_error_pages(text, entries \\ [])
+
+  def parse_error_pages(text, entries) when is_binary(text) do
+    layouts = Map.new(List.wrap(entries), &{estatus(&1), string_keys(&1)["layout"]})
+
     ~r/<!--\s*(\d+|offline|default)\s*-->\s*\n?(.*?)(?=\n*<!--\s*(?:\d+|offline|default)\s*-->|\z)/s
     |> Regex.scan(text)
     |> Enum.map(fn [_, status, template] ->
-      %{status: ErrorStatus.parse(status), template: String.trim(template)}
+      status = ErrorStatus.parse(status)
+      entry = %{status: status, template: String.trim(template)}
+
+      case layouts do
+        %{^status => %{} = layout} -> Map.put(entry, :layout, layout)
+        _none -> entry
+      end
     end)
   end
 
-  def parse_error_pages(_text), do: []
+  def parse_error_pages(_text, _entries), do: []
 
   # A layout wraps a page via `@inner_content`. For a standalone preview we fill that slot with the
   # layout's own `:example` HTML (so it renders for real), falling back to a dashed placeholder.

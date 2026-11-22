@@ -897,7 +897,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     put_preview(socket, fn p ->
       {html, error} =
         RuntimePreview.render_document(
-          put_content(p.record, p.resource, source),
+          put_content(p, source),
           p.resource,
           nonce
         )
@@ -1078,7 +1078,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     preview = socket.assigns.preview
     user = socket.assigns.current_user
     existing = preview.draft
-    attrs = draft_attrs(preview.record, source, label, preview.resource)
+    attrs = draft_attrs(preview, source, label)
 
     case write_draft(existing, attrs, preview.record, user, preview.resource) do
       {:ok, draft} ->
@@ -1190,27 +1190,31 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   defp draft_module(resource), do: draft_spec(resource).draft
 
-  defp draft_attrs(record, source, label, resource) do
+  defp draft_attrs(%{record: record, resource: resource} = preview, source, label) do
     spec = draft_spec(resource)
 
     record
     |> Map.take(spec.fields)
     |> Map.merge(%{:label => normalize_label(label), spec.source_field => record.id})
-    |> Map.merge(content_attr(spec, source))
+    |> Map.merge(content_attr(spec, source, edited(preview)))
   end
 
   # The editor works on a STRING. For Page/Layout that string IS the `:template`; for ErrorPage it's
-  # the serialized `error_pages` collection, parsed back on save.
-  defp content_attr(%{content_field: :error_pages}, source),
-    do: %{error_pages: RuntimePreview.parse_error_pages(source)}
+  # the serialized `error_pages` collection, parsed back on save onto the document it was read from.
+  defp content_attr(%{content_field: :error_pages}, source, edited),
+    do: %{error_pages: RuntimePreview.parse_error_pages(source, edited.error_pages)}
 
-  defp content_attr(%{content_field: field}, source), do: %{field => source}
+  defp content_attr(%{content_field: field}, source, _edited), do: %{field => source}
+
+  defp edited(%{draft: %{} = draft}), do: draft
+  defp edited(%{record: record}), do: record
 
   # Put the editor string back into the record's content field for an unsaved re-render preview.
-  defp put_content(record, resource, source) do
+  defp put_content(%{record: record, resource: resource} = preview, source) do
     case draft_spec(resource) do
       %{content_field: :error_pages} ->
-        Map.put(record, :error_pages, RuntimePreview.parse_error_pages(source))
+        entries = RuntimePreview.parse_error_pages(source, edited(preview).error_pages)
+        Map.put(record, :error_pages, entries)
 
       %{content_field: field} ->
         Map.put(record, field, source)

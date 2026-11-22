@@ -15,7 +15,7 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.{ErrorAddress, ErrorPage}
+  alias MishkaCmsCore.Runtime.{ErrorAddress, ErrorPage, ErrorPageDraft}
   alias MishkaCmsCore.Runtime.States.SiteState
 
   require Ash.Query
@@ -202,4 +202,56 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
   end
 
   defp form_id(_view), do: MishkaGervaz.Resource.Info.Form.component_id(ErrorPage) <> "-form"
+
+  # The Code tab's text holds the templates alone.
+  test "a Code tab save keeps each entry's layout, of the page and then of the draft it edits", %{
+    conn: conn,
+    site: site,
+    row: row
+  } do
+    framed = %{"template" => "<main>{@inner_content}</main>"}
+
+    row
+    |> Ash.Changeset.for_update(
+      :update,
+      %{
+        error_pages: [
+          %{status: 404, template: "<p>Not here</p>", layout: framed},
+          %{status: :default, template: "<p>Any</p>", layout: framed},
+          %{status: 500, template: "<p>Broke</p>"}
+        ]
+      },
+      tenant: site.id,
+      authorize?: false
+    )
+    |> Ash.update!()
+
+    {:ok, view, _html} = live(conn, @path)
+    send(view.pid, {:row_action, "show_preview_modal", %{"id" => row.id}})
+    render_async(view, 5_000)
+
+    for word <- ["first", "second"] do
+      render_click(view, "preview_edit_code", %{})
+
+      render_submit(view, "preview_code_submit", %{
+        "op" => "save",
+        "source" =>
+          "<!-- 404 -->\n<p>#{word}</p>\n\n<!-- default -->\n<p>Any</p>\n\n<!-- 403 -->\n<p>New</p>"
+      })
+
+      assert [draft] =
+               ErrorPageDraft
+               |> Ash.Query.set_tenant(site.id)
+               |> Ash.read!(authorize?: false)
+
+      assert [
+               %{status: 404, template: "<p>" <> _, layout: ^framed},
+               %{status: :default, layout: ^framed},
+               %{status: 403} = new
+             ] = draft.error_pages
+
+      assert hd(draft.error_pages).template == "<p>#{word}</p>"
+      assert new[:layout] == nil
+    end
+  end
 end
