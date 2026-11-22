@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Runtime.ErrorAddressReservedTest do
   The address a site's Error Page answers at is its own: a page or a layout saved there would take
   the routing entry the renderer looks it up by.
   """
-  use MishkaCmsCore.DataCase, async: true
+  use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsCore.Runtime.{ErrorAddress, ErrorPage, Layout, LayoutDraft, Page, PageDraft}
 
