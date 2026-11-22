@@ -533,7 +533,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     # Inner + per-status layout render through the HEEx TagEngine (like the live server) so
     # `<.component site={@site} />` and `phx-*` hooks work; `site`/`page` mirror page_assigns/1.
     assigns = %{
-      conn: preview_conn(record, status),
+      conn: preview_conn(record, status, nonce),
       status: drawn_status(status),
       site: site_name(record),
       page: record,
@@ -565,7 +565,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
           render_html(
             root,
             %{
-              conn: preview_conn(record, status),
+              conn: preview_conn(record, status, nonce),
               status: drawn_status(status),
               site: site_name(record),
               page: record,
@@ -574,7 +574,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
             nonce
           )
 
-        {html, note || root_note}
+        {inline_site_css(html, record, nonce), note || root_note}
 
       _ ->
         {document(
@@ -627,9 +627,10 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   # copy. `status` is the one the author chose in the strip, so the page says the number it is for;
   # the offline page is answered as a 503, as `MishkaCms.Plugs.MaintenanceGate` answers it, and the
   # default page as the code it is drawn with.
-  defp preview_conn(record, status) do
+  # A `<style>` of the layout's own takes the document's nonce as it takes the request's.
+  defp preview_conn(record, status, nonce) do
     %{
-      assigns: %{current_site: preview_site(record)},
+      assigns: %{current_site: preview_site(record), csp_nonce: nonce},
       request_path: "/",
       query_string: "",
       method: "GET",
@@ -660,7 +661,28 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     end
   end
 
-  defp css_bundle(record), do: AssetsState.get_value(site_name(record), "css") || ""
+  # A site's stylesheet travels with the document to the browser, so one past this is left out.
+  @inline_limit 2_097_152
+
+  defp css_bundle(record) do
+    case AssetsState.get_value(site_name(record), "css") do
+      css when is_binary(css) and byte_size(css) <= @inline_limit -> css
+      _none_or_too_large -> ""
+    end
+  end
+
+  # A ROOT LAYOUT LINKS THE SITE'S STYLESHEET (`Shared.site_css_href/1`), and the sandboxed frame
+  # holds no cookie: on the admin's host, which is another site's, the link is answered with a 404.
+  defp inline_site_css(html, record, nonce) do
+    site = Regex.escape(site_name(record))
+    style = "<style#{nonce_attr(nonce)}>#{css_bundle(record)}</style>"
+
+    Regex.replace(
+      ~r{<link\b[^>]*\shref=["']/assets/css/#{site}/[^"']*["'][^>]*>}i,
+      html,
+      fn _link -> style end
+    )
+  end
 
   @doc """
   Parse the Code-tab's serialized error pages (`<!-- 404 -->`-delimited blocks, `<!-- offline -->`
@@ -772,8 +794,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   end
 
   defp wrap(record, {body_html, error_note}, nonce, info_note \\ nil) do
-    css = AssetsState.get_value(site_name(record), "css") || ""
-    {document(title(record), css, body_html, nonce), error_note || info_note}
+    {document(title(record), css_bundle(record), body_html, nonce), error_note || info_note}
   end
 
   defp body(template, assigns, nonce) when is_binary(template),

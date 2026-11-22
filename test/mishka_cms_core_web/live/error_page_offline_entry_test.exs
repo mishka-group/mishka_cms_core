@@ -269,6 +269,24 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
     assert Enum.map(stored(row).error_pages, & &1.status) == [404, 500]
   end
 
+  test "typing in the Code tab draws nothing again", %{conn: conn, row: row} do
+    {:ok, view, _html} = live(conn, @path)
+    send(view.pid, {:row_action, "show_preview_modal", %{"id" => row.id}})
+    render_async(view, 5_000)
+    render_click(view, "preview_edit_code", %{})
+
+    render_submit(view, "preview_code_submit", %{
+      "op" => "rerender",
+      "source" => "<!-- 404 -->\n<p>Drawn</p>"
+    })
+
+    frame = view |> element("iframe[srcdoc]") |> render()
+
+    render_change(view, "preview_code_change", %{"source" => "<!-- 404 -->\n<p>Typed</p>"})
+
+    assert view |> element("iframe[srcdoc]") |> render() == frame
+  end
+
   # The Code tab's text holds the templates alone.
   test "a Code tab save keeps each entry's layout, of the page and then of the draft it edits", %{
     conn: conn,
