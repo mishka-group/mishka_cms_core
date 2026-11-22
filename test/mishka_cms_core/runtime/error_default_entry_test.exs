@@ -121,6 +121,16 @@ defmodule MishkaCmsCore.Runtime.ErrorDefaultEntryTest do
     assert draw(page, 403) =~ "first default"
   end
 
+  test "a page compiled again has forgotten the draws of it that failed" do
+    page = page!([entry(404, "<p>ok</p>")])
+    CompileFailureState.record({page.module, 404}, "boom")
+    CompileFailureState.record({page.module, :offline}, "boom")
+
+    update!(page, [entry(404, "<p>ok again</p>")])
+
+    assert CompileFailureState.matching({page.module, :_}) == []
+  end
+
   test "site A's default entry never answers on site B" do
     a = page!([entry(:default, "<p>site A</p>")])
     b = page!([entry(404, "<p>site B</p>")])

@@ -11,8 +11,9 @@ defmodule MishkaCmsCore.Runtime.States.CompileFailureState do
   (and caught once) rather than recompiled-and-rescued on every request. A successful
   compile clears the entry; an `:update` recompile bypasses the cache and refreshes it.
 
-  `{module, :offline}` is an Error Page whose `:offline` entry compiled but raised when it was drawn;
-  the module stays loaded for its other entries.
+  `{module, status}` is an Error Page whose entry for `status`, a code or `:offline`, compiled but
+  raised when it was last drawn, with the start of its message; the module stays loaded for its other
+  entries. The `:offline` one is drawn as the module is compiled, the codes by a failed request.
 
   `{MishkaCmsCore.Runtime.JsHook, hook_id, bundle}` is a JS hook left out of a site's JavaScript
   bundle — see `MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler.left_out/1`.

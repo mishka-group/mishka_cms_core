@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
   import Ecto.Query
 
   alias MishkaCmsCore.Runtime.Compilers.Helpers
-  alias MishkaCmsCore.Runtime.Page
+  alias MishkaCmsCore.Runtime.{ErrorPage, Page}
   alias MishkaCmsCore.Runtime.RuntimeStatus
   alias MishkaCmsCore.Runtime.States.CompileFailureState
 
@@ -74,6 +74,44 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
       CompileFailureState.record(module, :compilation_error)
 
       assert RuntimeStatus.compute(page, Page).message =~ "did not compile"
+    end
+  end
+
+  # Its entries compile into one module, so an entry that raises as it is drawn leaves it loaded.
+  describe "an error page with an entry that could not be drawn" do
+    setup do
+      site = create_site!()
+      error_page = create_error_page!(site_id: site.id)
+      module = Helpers.module_name(error_page.id, "Global", "ErrorPage")
+      on_exit(fn -> CompileFailureState.clear_matching({module, :_}) end)
+
+      %{error_page: error_page, error_module: module}
+    end
+
+    test "reports the entry and the first line of the reason", context do
+      for status <- [404, :offline] do
+        :ok = CompileFailureState.clear_matching({context.error_module, :_})
+
+        CompileFailureState.record(
+          {context.error_module, status},
+          "key :total not found in:\n\n  %{secret: 1}"
+        )
+
+        answer = RuntimeStatus.compute(context.error_page, ErrorPage)
+
+        assert answer.state == :failed
+        assert answer.message =~ "#{status} page"
+        assert answer.message =~ "key :total not found"
+        refute answer.message =~ "secret"
+      end
+    end
+
+    test "is ready again once it was drawn", context do
+      CompileFailureState.record({context.error_module, 404}, "boom")
+      assert RuntimeStatus.compute(context.error_page, ErrorPage).state == :failed
+
+      CompileFailureState.clear({context.error_module, 404})
+      assert RuntimeStatus.compute(context.error_page, ErrorPage).state == :lazy_ready
     end
   end
 

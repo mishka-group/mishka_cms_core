@@ -204,7 +204,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
   defp classify(%{module: module} = base, cfg) when not is_nil(module) do
     case CompileFailureState.failed?(module) do
       true -> {:failed, gettext("Compile failed"), failure_message(base, reason(module))}
-      false -> classify_runtime(base, cfg)
+      false -> {module, :_} |> CompileFailureState.matching() |> classify_drawn(base, cfg)
     end
   end
 
@@ -238,6 +238,22 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
       )
 
   defp failure_message(_base, reason), do: reason
+
+  # AN ERROR PAGE'S ENTRY MAY COMPILE AND THEN RAISE AS IT IS DRAWN, and the site answers without it
+  # while its module is loaded like any other.
+  defp classify_drawn([], base, cfg), do: classify_runtime(base, cfg)
+
+  defp classify_drawn([{{_module, status}, reason} | _others], _base, _cfg),
+    do:
+      {:failed, gettext("Draw failed"),
+       gettext("The last time its %{status} page was drawn, it failed: %{reason}",
+         status: to_string(status),
+         reason: first_line(reason)
+       )}
+
+  # The rest of a `KeyError`'s message is every assign of the request it was raised in.
+  defp first_line(reason),
+    do: reason |> String.split("\n", parts: 2) |> hd() |> String.slice(0, 200)
 
   defp reason(module) do
     case CompileFailureState.reason(module) do
