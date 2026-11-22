@@ -246,7 +246,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
   defp classify_drawn([{{_module, status}, reason} | _others], _base, _cfg),
     do:
       {:failed, gettext("Draw failed"),
-       gettext("The last time its %{status} page was drawn, it failed: %{reason}",
+       gettext("Since it was last built, its %{status} page failed to be drawn: %{reason}",
          status: to_string(status),
          reason: first_line(reason)
        )}

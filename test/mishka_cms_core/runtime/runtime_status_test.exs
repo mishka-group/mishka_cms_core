@@ -106,7 +106,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
       end
     end
 
-    test "is ready again once it was drawn", context do
+    test "is ready again once its failure is forgotten", context do
       CompileFailureState.record({context.error_module, 404}, "boom")
       assert RuntimeStatus.compute(context.error_page, ErrorPage).state == :failed
 
