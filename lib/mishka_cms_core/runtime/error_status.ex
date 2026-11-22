@@ -86,13 +86,13 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
   def offline, do: @offline
 
   @doc """
-  A status from whatever spelled it, or `nil` when it names none.
+  A status from whatever spelled it, in capital letters or not, or `nil` when it names none.
 
       iex> MishkaCmsCore.Runtime.ErrorStatus.parse("404")
       404
       iex> MishkaCmsCore.Runtime.ErrorStatus.parse("offline")
       :offline
-      iex> MishkaCmsCore.Runtime.ErrorStatus.parse("default")
+      iex> MishkaCmsCore.Runtime.ErrorStatus.parse("DEFAULT")
       :default
       iex> MishkaCmsCore.Runtime.ErrorStatus.parse("teapot")
       nil
@@ -100,18 +100,20 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
   @spec parse(term()) :: t() | nil
   def parse(status) when is_integer(status), do: status
   def parse(@offline), do: @offline
-  def parse("offline"), do: @offline
   def parse(@default), do: @default
-  def parse("default"), do: @default
 
   def parse(status) when is_binary(status) do
-    case Integer.parse(String.trim(status)) do
-      {code, ""} -> code
-      _not_a_status -> nil
+    case status |> String.trim() |> String.downcase() do
+      "offline" -> @offline
+      "default" -> @default
+      code -> code(Integer.parse(code))
     end
   end
 
   def parse(_status), do: nil
+
+  defp code({code, ""}), do: code
+  defp code(_not_a_status), do: nil
 
   @doc """
   Whether a list of Error Page entries holds the `:offline` one, however its status was spelled.

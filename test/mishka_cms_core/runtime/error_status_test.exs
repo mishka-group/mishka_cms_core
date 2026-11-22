@@ -31,6 +31,8 @@ defmodule MishkaCmsCore.Runtime.ErrorStatusTest do
       assert ErrorStatus.parse("offline") == :offline
       assert ErrorStatus.parse(:default) == :default
       assert ErrorStatus.parse("default") == :default
+      assert ErrorStatus.parse(" OFFLINE ") == :offline
+      assert ErrorStatus.parse("Default") == :default
     end
 
     test "and names nothing for anything else" do
@@ -252,6 +254,28 @@ defmodule MishkaCmsCore.Runtime.ErrorStatusTest do
       assert source =~ "<!-- offline -->"
       assert source =~ "<!-- default -->"
       assert RuntimePreview.parse_error_pages(source) == entries
+    end
+
+    test "reads a marker in any letters, and leaves every other comment in its template" do
+      source = """
+      <!-- 404 -->
+      <p>Not here</p>
+      <!-- Defaults are below, not a marker -->
+      <!-- DEFAULT -->
+      <p>Any</p>
+      <!-- offline: ask Sam -->
+      <!--Offline-->
+      <p>Soon</p>
+      """
+
+      assert [
+               %{status: 404, template: first},
+               %{status: :default, template: second},
+               %{status: :offline, template: "<p>Soon</p>"}
+             ] = RuntimePreview.parse_error_pages(source)
+
+      assert first == "<p>Not here</p>\n<!-- Defaults are below, not a marker -->"
+      assert second == "<p>Any</p>\n<!-- offline: ask Sam -->"
     end
 
     test "draws the offline entry its address asks for" do
