@@ -29,24 +29,18 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles do
   @fields [:error_pages, :root_layout_template, :helpers]
 
   @impl true
-  def init(opts), do: {:ok, opts}
-
-  @impl true
   def validate(changeset, _opts, _context) do
-    case Enum.any?(@fields, &Ash.Changeset.changing_attribute?(changeset, &1)) do
-      true -> check(changeset)
-      false -> :ok
+    with true <- Enum.any?(@fields, &Ash.Changeset.changing_attribute?(changeset, &1)),
+         {:error, {part, fault}} <- CodeCheck.error_page(error_page(changeset)) do
+      {:error, field: field(part), message: message(part, CodeCheck.message(fault))}
+    else
+      _unchanged_or_compiles -> :ok
     end
   end
 
   # The whole row, not just what changed: an entry may call a helper this write removes.
-  defp check(changeset) do
-    error_page = Map.new(@fields, &{&1, Ash.Changeset.get_attribute(changeset, &1)})
-
-    with {:error, {part, fault}} <- CodeCheck.error_page(error_page) do
-      {:error, field: field(part), message: message(part, CodeCheck.message(fault))}
-    end
-  end
+  defp error_page(changeset),
+    do: Map.new(@fields, &{&1, Ash.Changeset.get_attribute(changeset, &1)})
 
   defp field({:status, _status}), do: :error_pages
   defp field(field), do: field
