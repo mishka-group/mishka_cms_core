@@ -381,16 +381,16 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
   # here, as a visitor gets it, and a failure is kept in `CompileFailureState` under
   # `{module, :offline}`: `MishkaCmsWeb.ErrorHTML.offline_page/1` reads it and hands the visitor the
   # built-in page instead. The module stays loaded, so its 404 and 500 still work. What was kept of the
-  # module compiled before it, for this entry and the others, is forgotten.
+  # module compiled before it, for this entry and the others, is forgotten once the new one was drawn,
+  # so an entry that fails again is not taken for one that draws meanwhile.
   #
   # By the caller that started the compile, once its worker has ended and given back its slot: the
   # page may name a component that is not built yet, and building it takes a slot of its own.
   defp check_offline_page({:ok, module}) do
     if function_exported?(module, :__error_information__, 1) do
+      drawn = if ErrorCompiler.offline_entry?(module), do: draw_offline_page(module), else: :ok
       CompileFailureState.clear_matching({module, :_})
-
-      if ErrorCompiler.offline_entry?(module),
-        do: module |> draw_offline_page() |> offline_page_drawn(module)
+      offline_page_drawn(drawn, module)
     end
 
     :ok

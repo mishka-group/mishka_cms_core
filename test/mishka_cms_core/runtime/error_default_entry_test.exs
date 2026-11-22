@@ -131,6 +131,25 @@ defmodule MishkaCmsCore.Runtime.ErrorDefaultEntryTest do
     assert CompileFailureState.matching({page.module, :_}) == []
   end
 
+  # The template is drawn by the process that compiled it, and tells it what is known meanwhile.
+  test "an offline entry that fails is known to fail all through its next compile" do
+    failing =
+      ~S|<% send(self(), {:known, MishkaCmsCore.Runtime.States.CompileFailureState.failed?({@conn.assigns.page_module, :offline})}) %>{raise "cannot draw"}|
+
+    page = page!([entry(:offline, failing)])
+    assert_received {:known, false}
+
+    on_exit(fn -> CompileFailureState.clear({page.module, :offline}) end)
+    assert CompileFailureState.reason({page.module, :offline}) =~ "cannot draw"
+
+    assert {:ok, _module} = compile(page, :update)
+    assert_received {:known, true}
+    assert CompileFailureState.failed?({page.module, :offline})
+
+    update!(page, [entry(:offline, "<p>fine</p>")])
+    refute CompileFailureState.failed?({page.module, :offline})
+  end
+
   test "site A's default entry never answers on site B" do
     a = page!([entry(:default, "<p>site A</p>")])
     b = page!([entry(404, "<p>site B</p>")])
