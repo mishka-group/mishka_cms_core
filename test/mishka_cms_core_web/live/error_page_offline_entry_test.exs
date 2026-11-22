@@ -320,4 +320,31 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
       assert new[:layout] == nil
     end
   end
+
+  test "a Code tab save with text above the first marker is refused, and says where it is", %{
+    conn: conn,
+    site: site,
+    row: row
+  } do
+    {:ok, view, _html} = live(conn, @path)
+    send(view.pid, {:row_action, "show_preview_modal", %{"id" => row.id}})
+    render_async(view, 5_000)
+    render_click(view, "preview_edit_code", %{})
+
+    save = fn source ->
+      render_submit(view, "preview_code_submit", %{"op" => "save", "source" => source})
+    end
+
+    html = save.("<!-- note -->\n<p>Lost words</p>\n<!-- 404 -->\n<p>Kept</p>")
+
+    assert html =~ "Not saved."
+    assert html =~ "Line 2"
+    assert html =~ "Lost words", "the editor still holds what was typed"
+    assert Ash.read!(Ash.Query.set_tenant(ErrorPageDraft, site.id), authorize?: false) == []
+
+    save.("<!-- note -->\n\n<!-- 404 -->\n<p>Kept</p>")
+
+    assert [%{error_pages: [%{status: 404, template: "<p>Kept</p>"}]}] =
+             Ash.read!(Ash.Query.set_tenant(ErrorPageDraft, site.id), authorize?: false)
+  end
 end

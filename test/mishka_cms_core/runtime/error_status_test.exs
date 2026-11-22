@@ -293,6 +293,27 @@ defmodule MishkaCmsCore.Runtime.ErrorStatusTest do
       assert RuntimePreview.parse_error_pages(source) == entries
     end
 
+    test "says where text is that no marker holds, and takes blank lines and comments for none" do
+      for {text, line} <- [
+            {"<p>lost</p>\n<!-- 404 -->\n<p>kept</p>", 1},
+            {"\n<!-- two\nlines -->\n\n  <p>lost</p>\n<!-- offline -->\n<p>kept</p>", 5},
+            {"<%!-- note --%> lost\n<!-- DEFAULT -->\n<p>kept</p>", 1},
+            {"\n<p>no marker at all</p>", 2},
+            {"<!-- 404 and more -->\n<p>lost</p>", 2}
+          ] do
+        assert RuntimePreview.unmarked_line(text) == line, text
+      end
+
+      for text <- [
+            "",
+            " \n\n",
+            "<!-- 404 -->\n<p>kept</p>",
+            "\n  <!-- a note\nof two lines -->\n<%!-- another --%>\n<!-- 404 -->\n<p>kept</p>"
+          ] do
+        assert RuntimePreview.unmarked_line(text) == nil, text
+      end
+    end
+
     test "reads a marker in any letters, and leaves every other comment in its template" do
       source = """
       <!-- 404 -->

@@ -691,6 +691,27 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   def parse_error_pages(_text, _entries), do: []
 
+  @doc """
+  The line of a Code tab's text that is above its first marker, so `parse_error_pages/2` puts it in no
+  entry: `nil` when there is nothing there but blank lines and comments.
+  """
+  @spec unmarked_line(String.t()) :: pos_integer() | nil
+  def unmarked_line(text) when is_binary(text) do
+    [unmarked | _marked] =
+      Regex.split(~r/<!--\s*(?:\d+|offline|default)\s*-->/i, text, parts: 2)
+
+    written =
+      Regex.replace(
+        ~r/<!--.*?-->|<%!--.*?--%>|<%#.*?%>/s,
+        unmarked,
+        &String.replace(&1, ~r/[^\n]/, "")
+      )
+
+    with index when is_integer(index) <-
+           written |> String.split("\n") |> Enum.find_index(&(String.trim(&1) != "")),
+         do: index + 1
+  end
+
   # A layout wraps a page via `@inner_content`. For a standalone preview we fill that slot with the
   # layout's own `:example` HTML (so it renders for real), falling back to a dashed placeholder.
   defp layout_assigns(record),
