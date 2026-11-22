@@ -1253,6 +1253,11 @@ msgstr ""
 msgid "This email exists and cannot be used as a master account"
 msgstr ""
 
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:67
+#, elixir-autogen, elixir-format
+msgid "This path is kept for the site's error pages"
+msgstr ""
+
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:1859
 #, elixir-autogen, elixir-format
 msgid "This site already has an error page — open that one instead of making another."

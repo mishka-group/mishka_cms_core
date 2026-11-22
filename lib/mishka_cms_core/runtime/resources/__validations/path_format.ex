@@ -17,6 +17,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
       punctuation.
     * holds at most one `*` wildcard, at the start of a segment (`/*category/:slug`, `/blog/*`)
     * is at most 255 characters
+    * is not an address of a site's error pages
+      (`MishkaCmsCore.Runtime.ErrorAddress.reserved?/1`), unless it is an error page's
 
   It is checked as `MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.canonical_path/1` reads
   it, so a path pasted with its `%XX` escapes is checked as the letters they stand for, which is
@@ -33,6 +35,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
   use Gettext, backend: MishkaCmsCore.Gettext
   use Ash.Resource.Validation
 
+  alias MishkaCmsCore.Runtime.{ErrorAddress, ErrorPage, ErrorPageDraft}
   alias MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState
 
   @max_length 255
@@ -48,18 +51,21 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
         :ok
 
       path when is_binary(path) ->
-        path |> WebRunTimeMetaDataState.canonical_path() |> validate_path()
+        path |> WebRunTimeMetaDataState.canonical_path() |> validate_path(changeset.resource)
 
       path ->
-        validate_path(path)
+        validate_path(path, changeset.resource)
     end
   end
 
-  defp validate_path(path) when not is_binary(path),
+  defp validate_path(path, _resource) when not is_binary(path),
     do: {:error, field: :path, message: dgettext_noop("errors", "Path must be a string.")}
 
-  defp validate_path(path) do
+  defp validate_path(path, resource) do
     cond do
+      resource not in [ErrorPage, ErrorPageDraft] and ErrorAddress.reserved?(path) ->
+        error(dgettext_noop("errors", "This path is kept for the site's error pages"))
+
       !String.starts_with?(path, "/") ->
         error(dgettext_noop("errors", "Path must start with '/'"))
 
