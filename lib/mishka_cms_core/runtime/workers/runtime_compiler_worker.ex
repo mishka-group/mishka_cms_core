@@ -461,7 +461,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   # Compiles or purges a module-backed resource (Page, Layout, ErrorPage) for its
   # active/precompile state. Purging also drops the routing entry so a
   # deactivated/deleted record stops resolving (→ 404 → ErrorPage) rather than
-  # being recompiled on the next visitor request.
+  # being recompiled on the next visitor request. A save makes a recorded compile
+  # failure stale, so the next request that needs the module tries again.
   @doc false
   def apply_module_lifecycle(action, data, module, resource, section) do
     cond do
@@ -473,6 +474,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
         :ok
 
       data["active"] ->
+        CompileFailureState.clear(module)
         save_metadata(data, section)
         create_template(data, resource)
 
