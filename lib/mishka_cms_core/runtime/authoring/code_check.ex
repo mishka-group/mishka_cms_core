@@ -4,8 +4,8 @@
 
 defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   @moduledoc """
-  Compiles a page's code without loading it, so an author is told about a mistake instead of a
-  visitor being shown one.
+  Compiles a page's code, or an Error Page's, without loading it, so an author is told about a
+  mistake instead of a visitor being shown one.
 
   ## Why this has to exist
 
@@ -59,7 +59,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Compilers.ErrorCompiler
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+  alias MishkaCmsCore.Runtime.ErrorStatus
 
   # GENEROUS ON PURPOSE. Compiling a page means expanding `use MishkaCmsWeb, :live_view`, which is
   # about a second of work on a warm machine and more on a cold or busy one. The budget is here to
@@ -85,6 +87,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
           required(:message) => String.t()
         }
 
+  @typedoc "Where an Error Page's fault is: an entry, or what all of them compile with."
+  @type error_page_part ::
+          {:status, ErrorStatus.t()} | :error_pages | :root_layout_template | :helpers
+
   @doc """
   Checks one page's code.
 
@@ -102,6 +108,32 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     case fragment_faults(params) do
       [] -> module_faults(params)
       faults -> {:error, faults}
+    end
+  end
+
+  @doc """
+  Checks one Error Page's code: its `:error_pages` with their layouts, its `:root_layout_template` and
+  its `:helpers`, compiled into one module by `ErrorCompiler`'s own stages, as `check/1` compiles a
+  page.
+
+  The fault comes with where it is: the status of the entry, `:root_layout_template` or `:helpers`,
+  and `:error_pages` when no part fails on its own or the compile took too long. Code that compiles
+  costs one compile. Code that does not is compiled again in parts, to find which one it was.
+  """
+  @spec error_page(map()) :: :ok | {:error, {error_page_part(), fault()}}
+  def error_page(error_page) when is_map(error_page) do
+    params = %{
+      title: "code_check",
+      site: "code_check",
+      error_module: candidate(),
+      error_pages: Map.get(error_page, :error_pages) || [],
+      root_layout_template: presence(Map.get(error_page, :root_layout_template)),
+      helpers: listed(error_page, :helpers)
+    }
+
+    case params.helpers |> Enum.with_index() |> Enum.flat_map(&helper_fault/1) do
+      [] -> error_page_fault(params)
+      [fault | _rest] -> {:error, {:helpers, fault}}
     end
   end
 
@@ -363,26 +395,57 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     do: Module.concat(__MODULE__, "C#{System.unique_integer([:positive])}")
 
   defp module_faults(params) do
-    task = Task.async(MishkaGervaz.Messages.in_caller_locale(fn -> compile(params) end))
+    case within_budget(fn -> compile(params) end) do
+      :ok -> :ok
+      {:error, fault} -> {:error, [fault]}
+    end
+  end
+
+  defp error_page_fault(params) do
+    case within_budget(fn -> blamed(params) end) do
+      {:error, %{} = out_of_time} -> {:error, {:error_pages, out_of_time}}
+      result -> result
+    end
+  end
+
+  defp blamed(params) do
+    with {:error, fault} <- compile_error_page(params) do
+      {:error, params |> parts() |> Enum.find_value({:error_pages, fault}, &part_fault/1)}
+    end
+  end
+
+  # What every entry compiles with first, then each entry alone.
+  defp parts(params) do
+    [
+      {:helpers, %{params | error_pages: [], root_layout_template: nil}},
+      {:root_layout_template, %{params | error_pages: []}}
+      | Enum.map(params.error_pages, &{{:status, &1.status}, %{params | error_pages: [&1]}})
+    ]
+  end
+
+  defp part_fault({part, params}) do
+    case compile_error_page(params) do
+      :ok -> nil
+      {:error, fault} -> {part, fault}
+    end
+  end
+
+  defp within_budget(fun) do
+    task = Task.async(MishkaGervaz.Messages.in_caller_locale(fun))
 
     case Task.yield(task, @compile_budget) || Task.shutdown(task, :brutal_kill) do
-      {:ok, :ok} ->
-        :ok
-
-      {:ok, {:error, fault}} ->
-        {:error, [fault]}
+      {:ok, result} ->
+        result
 
       _timeout ->
         {:error,
-         [
-           fault(
-             :page,
-             nil,
-             nil,
-             nil,
-             gettext("This took too long to compile. Something in it is probably looping.")
-           )
-         ]}
+         fault(
+           :page,
+           nil,
+           nil,
+           nil,
+           gettext("This took too long to compile. Something in it is probably looping.")
+         )}
     end
   end
 
@@ -395,7 +458,16 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     |> stage(:state, &LiveViewCompiler.build_page_state/1)
     |> stage(:template, &LiveViewCompiler.build_renders/1)
     |> stage(:helpers, &LiveViewCompiler.build_helpers/1)
-    |> load(params.page_module)
+    |> load(params.page_module, &LiveViewCompiler.create_module_ast/1)
+  end
+
+  defp compile_error_page(params) do
+    params
+    |> stage(:page, &ErrorCompiler.build_error_information/1)
+    |> stage(:template, &ErrorCompiler.build_layout_functions/1)
+    |> stage(:template, &ErrorCompiler.build_render_functions/1)
+    |> stage(:helpers, &ErrorCompiler.build_helpers/1)
+    |> load(params.error_module, &ErrorCompiler.create_module_ast/1)
   end
 
   defp stage({:error, _fault} = error, _tab, _fun), do: error
@@ -423,7 +495,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     |> String.replace(@template_file, gettext("the template"))
   end
 
-  defp load({:error, _fault} = error, _module), do: error
+  defp load({:error, _fault} = error, _module, _create_ast), do: error
 
   # `Code.compile_quoted/2` reports a semantic error as "cannot compile module … (errors have been
   # logged)" and puts the sentence the author needs on the logger instead. `with_diagnostics/1` hands
@@ -431,8 +503,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # the server console.
   # Compiling the admin's own code is what this check is for.
   # sobelow_skip ["RCE.Compile"]
-  defp load(built, module) do
-    ast = LiveViewCompiler.create_module_ast(built)
+  defp load(built, module, create_ast) do
+    ast = create_ast.(built)
     purge(module)
 
     {result, diagnostics} =
@@ -479,8 +551,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # both sides of the compile: before, in case an earlier check under this name was killed by the
   # budget, and after, so nothing that was only ever a rehearsal is left loaded.
   defp purge(module) do
-    :code.purge(module)
     :code.delete(module)
+    :code.purge(module)
     :ok
   end
 

@@ -51,7 +51,7 @@ defmodule MishkaCmsCore.Runtime.StatefulPlacementTest do
   # refuses and the error compiler's classic engine takes.
   defp root_layout(body),
     do:
-      ~s|<html><head><meta name="csrf-token" content="<%= token() %>" /></head>| <>
+      ~s|<html><head><meta name="csrf-token" content="<%= Phoenix.Controller.get_csrf_token() %>" /></head>| <>
         ~s(<body>#{body}<%= @inner_content %></body></html>)
 
   defp make_live(component, tenant) do

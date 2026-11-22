@@ -938,6 +938,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
+        before_action?: true
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
                 noun: dgettext_noop("errors", "An error page")}
 
@@ -967,6 +970,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
+        before_action?: true
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
                 noun: dgettext_noop("errors", "An error page")}
@@ -999,6 +1005,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
+        before_action?: true
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
                 noun: dgettext_noop("errors", "An error page")}
 
@@ -1030,6 +1039,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
+        before_action?: true
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
                 noun: dgettext_noop("errors", "An error page")}
@@ -1399,6 +1411,10 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       # they are declared, and a restore writes markup like any other save.
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
                 noun: dgettext_noop("errors", "An error page")}
+
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
+        before_action?: true
     end
 
     action :restore_version_api, :struct do

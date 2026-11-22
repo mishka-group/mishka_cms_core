@@ -43,7 +43,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerBrokenModuleTest do
     {:ok, site: site}
   end
 
-  # A page's own save refuses code that does not compile, so it is stored behind its back.
+  # A page's own save refuses code that does not compile, and an error page's, so it is stored behind
+  # its back.
   defp broken!("Page", site) do
     [site_id: site.id, precompile: false]
     |> create_page!()
@@ -54,11 +55,9 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerBrokenModuleTest do
     do: create_layout!(site_id: site.id, precompile: false, template: @broken)
 
   defp broken!("ErrorPage", site) do
-    create_error_page!(
-      site_id: site.id,
-      precompile: false,
-      error_pages: [%{status: 404, template: @broken}]
-    )
+    [site_id: site.id, precompile: false]
+    |> create_error_page!()
+    |> Ash.Seed.update!(%{error_pages: [%{status: 404, template: @broken}]})
   end
 
   defp fixed("ErrorPage"), do: %{error_pages: [%{status: 404, template: @fixed}]}
