@@ -420,7 +420,10 @@ defmodule MishkaCmsCore.Runtime.Resources.RedirectTest do
 
       on_exit(fn -> SiteState.delete(site.id) end)
 
-      assert refused_on?(create(site, %{from_path: "/a", to: "https://#{site.host}/a"}), :to)
+      for host <- [site.host, String.upcase(site.host), site.host <> "."] do
+        assert refused_on?(create(site, %{from_path: "/a", to: "https://#{host}/a"}), :to), host
+      end
+
       assert {:ok, _redirect} = create(site, %{from_path: "/a", to: "https://elsewhere.test/a"})
     end
 

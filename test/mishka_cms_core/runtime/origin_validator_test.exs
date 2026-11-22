@@ -29,7 +29,20 @@ defmodule MishkaCmsCore.Runtime.OriginValidatorTest do
       assert OriginValidator.host_name("[2001:db8::1]") == "2001:db8::1"
     end
 
+    test "is in lower case and without the root's dot, as a site's host is stored" do
+      assert OriginValidator.host_name("SITE-A.Example.com:4000") == "site-a.example.com"
+      assert OriginValidator.host_name("site-a.example.com.") == "site-a.example.com"
+      assert OriginValidator.host_name("SITE-A.example.com.:4000") == "site-a.example.com"
+      assert OriginValidator.host_name("[2001:DB8::1]") == "2001:db8::1"
+    end
+
+    test "drops one dot alone, and none that is not at the end" do
+      assert OriginValidator.host_name("site-a.example.com..") == "site-a.example.com."
+      assert OriginValidator.host_name(".site-a.example.com") == ".site-a.example.com"
+    end
+
     test "is nil for a header that names no host" do
+      assert OriginValidator.host_name(".") == nil
       assert OriginValidator.host_name("") == nil
       assert OriginValidator.host_name(":4000") == nil
       assert OriginValidator.host_name(nil) == nil

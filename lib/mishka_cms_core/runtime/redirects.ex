@@ -75,7 +75,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.ErrorsExceptions.NotFoundError
-  alias MishkaCmsCore.Runtime.{Media, Redirect, Seo, SiteAvailability}
+  alias MishkaCmsCore.Runtime.{Media, OriginValidator, Redirect, Seo, SiteAvailability}
   alias MishkaCmsCore.Runtime.States.{RedirectsState, SiteState, WebRunTimeMetaDataState}
   alias MishkaInstaller.Event.Hook
 
@@ -639,7 +639,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     else
       %URI{host: host, path: path} = URI.parse(target)
 
-      case SiteState.get_by_host(host) do
+      case host |> OriginValidator.host_name() |> SiteState.get_by_host() do
         {:ok, %{id: ^site_id}} -> normalize_path(path || "/")
         _another_site -> :external
       end
