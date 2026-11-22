@@ -380,8 +380,9 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   real LiveView preview (`MishkaCmsWeb.DraftPreviewLive`) — where the per-site JS bundle and the
   temporary draft CSS are linked by the layout. Returns the HTML string (or a styled note).
 
-  For an ErrorPage, `status` selects which code (404/500/… or `:offline`) to render; nil falls back
-  to the `status` in `request`'s `:query_params`, then to the first entry.
+  For an ErrorPage, `status` selects which code (404/500/…, `:default` or `:offline`) to render; nil
+  falls back to the `status` in `request`'s `:query_params`, then to the first entry. The `:default`
+  entry, which answers many codes, is drawn as a 403.
   A fragment that degrades to a note carries a `<style>` of its own, so `nonce` reaches that too.
 
   For a Page, `request` is the address the preview was opened at: `:path` is handed to the template
@@ -448,7 +449,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     if status in statuses, do: status, else: List.first(statuses)
   end
 
-  # The preview's own address names the entry as text, `?status=offline` included.
+  # The preview's own address names the entry as text, `?status=offline` and `?status=default`
+  # included.
   defp requested_status(request) do
     case Keyword.get(request, :query_params) do
       %{"status" => status} -> ErrorStatus.parse(status)
@@ -458,7 +460,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   @doc """
   The statuses present in an ErrorPage record's `error_pages` collection (in order) — HTTP codes,
-  and `:offline` for the page an offline site shows.
+  `:default` for the page of every other code and `:offline` for the page an offline site shows.
   """
   def error_statuses(record),
     do:
@@ -528,7 +530,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     # `<.component site={@site} />` and `phx-*` hooks work; `site`/`page` mirror page_assigns/1.
     assigns = %{
       conn: preview_conn(record, status),
-      status: status,
+      status: drawn_status(status),
       site: site_name(record),
       page: record,
       inner_content: ""
@@ -560,7 +562,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
             root,
             %{
               conn: preview_conn(record, status),
-              status: status,
+              status: drawn_status(status),
               site: site_name(record),
               page: record,
               inner_content: Phoenix.HTML.raw(inner)
@@ -572,7 +574,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
       _ ->
         {document(
-           gettext("%{title} — %{status}", title: title(record), status: status),
+           gettext("%{title} — %{status}", title: title(record), status: drawn_status(status)),
            css_bundle(record),
            inner,
            nonce
@@ -620,7 +622,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   # These are stand-ins, not guesses at a real request: the path a preview would "retry" is the
   # site's root, and none of these values reaches a pixel — they land in an `href` and a line of
   # copy. `status` is the one the author chose in the strip, so the page says the number it is for;
-  # the offline page is answered as a 503, as `MishkaCms.Plugs.MaintenanceGate` answers it.
+  # the offline page is answered as a 503, as `MishkaCms.Plugs.MaintenanceGate` answers it, and the
+  # default page as the code it is drawn with.
   defp preview_conn(record, status) do
     %{
       assigns: %{current_site: preview_site(record)},
@@ -633,7 +636,12 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   end
 
   defp http_status(:offline), do: 503
-  defp http_status(status), do: status
+  defp http_status(status), do: drawn_status(status)
+
+  # THE DEFAULT PAGE ANSWERS MANY CODES AND IS DRAWN WITH ONE OF THEM, a code as a visitor gets it:
+  # `@status` there is the code of the request, never `:default`.
+  defp drawn_status(:default), do: 403
+  defp drawn_status(status), do: status
 
   defp preview_site(record) do
     case Map.get(record, :site) do
@@ -653,11 +661,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   @doc """
   Parse the Code-tab's serialized error pages (`<!-- 404 -->`-delimited blocks, `<!-- offline -->`
-  for the offline page, as produced by `source/1`) back into the `error_pages` collection
-  (`[%{status, template}]`). Used when saving an `ErrorPageDraft` from the editor.
+  for the offline page and `<!-- default -->` for the default one, as produced by `source/1`) back
+  into the `error_pages` collection (`[%{status, template}]`). Used when saving an `ErrorPageDraft` from the editor.
   """
   def parse_error_pages(text) when is_binary(text) do
-    ~r/<!--\s*(\d+|offline)\s*-->\s*\n?(.*?)(?=\n*<!--\s*(?:\d+|offline)\s*-->|\z)/s
+    ~r/<!--\s*(\d+|offline|default)\s*-->\s*\n?(.*?)(?=\n*<!--\s*(?:\d+|offline|default)\s*-->|\z)/s
     |> Regex.scan(text)
     |> Enum.map(fn [_, status, template] ->
       %{status: ErrorStatus.parse(status), template: String.trim(template)}

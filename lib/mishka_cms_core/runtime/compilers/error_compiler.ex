@@ -17,7 +17,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   - Flexible layout system with root layout and per-status layouts
   - Helper function integration for custom error page logic
   - Automatic CSS and JavaScript injection for styled error pages
-  - Fallback error handling for unhandled status codes
+  - One optional `:default` entry for the status codes with no entry of their own, and a fallback
+    without it
   - Site-specific error page configurations
 
   ## Error Page Structure
@@ -77,8 +78,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   ## Error Page Configuration
 
   Each error page in the `:error_pages` list should contain:
-  - `:status` - HTTP status code, or `:offline` for the page an offline site shows (required) —
-    see `MishkaCmsCore.Runtime.ErrorStatus`
+  - `:status` - HTTP status code, `:default` for the page of every code with no entry of its own, or
+    `:offline` for the page an offline site shows (required) — see
+    `MishkaCmsCore.Runtime.ErrorStatus`
   - `:template` - Error content template (required)
   - `:layout` - Optional layout wrapper with `:template` key
   """
@@ -120,7 +122,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   ## Error Page Structure
 
   Each error page in `:error_pages` should contain:
-  - `:status` - HTTP status code (integer)
+  - `:status` - HTTP status code (integer), `:default` or `:offline`
   - `:template` - Error content template string
   - `:layout` - Optional layout map with `:template` key
 
@@ -246,8 +248,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   @doc """
   Build layout functions for error pages.
 
-  Generates layout functions for each error page status code. Layout functions provide
-  an intermediate rendering layer between the error template and the root layout.
+  Generates layout functions for each error page status code, the `:default` entry's under
+  `:default`. Layout functions provide an intermediate rendering layer between the error template
+  and the root layout.
 
   ## Parameters
 
@@ -300,10 +303,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   3. Calls the appropriate layout function for the status
   4. Wraps the result in the root layout
 
+  ## The Default Entry
+
+  The `:default` entry's `render/2` follows those of the codes, wherever the entry sits in the list,
+  and takes any other code: its template, its layout and the root layout draw with that code as
+  `@status`, and nothing is logged. It takes a code only, so it never answers for `:offline`.
+
   ## Catch-All Function
 
   Adds a fallback `render/2` function that:
-  - Handles any unhandled status codes
+  - Handles any unhandled status codes of an Error Page with no `:default` entry
   - Logs a warning about the missing error page
   - Returns a plain text status phrase using `Plug.Conn.Status.reason_phrase/1`
 
@@ -315,8 +324,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   4. Root layout wraps the final result
   """
   def build_render_functions({params, functions_ast}) do
+    {default, own} =
+      Enum.split_with(params[:error_pages] || [], &(entry_status(&1) == :default))
+
     render_functions_ast =
-      Enum.map(params[:error_pages] || [], fn error_page ->
+      Enum.map(own ++ default, fn error_page ->
         build_render_function(error_page, params[:site], params[:error_module])
       end)
 
@@ -527,7 +539,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   end
 
   @doc """
-  The compiled Error Page `module`'s page for `status`, drawn for `conn`, as HTML.
+  The compiled Error Page `module`'s page for `status`, drawn for `conn`, as HTML: the entry of that
+  status, or for a code without one the `:default` entry.
 
   The template is handed `@status`, and `@conn` with `:page_module` and `:page_data` assigned.
   """
@@ -613,7 +626,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   # ## Returns
   #
   # Returns AST for a `render/2` function that:
-  # 1. Pattern matches on the specific status code
+  # 1. Pattern matches on the specific status code, or takes any code for the `:default` entry
   # 2. Compiles the error template
   # 3. Creates assigns with conn, status, and inner_content
   # 4. Applies layout function
@@ -634,7 +647,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
         # outside a live socket (error pages are served by a controller, not a LiveView).
         var!(assigns) = %{
           conn: var!(conn),
-          status: unquote(status),
+          status: unquote(drawn_status(status)),
           site: unquote(site),
           __changed__: %{},
           socket: %Phoenix.LiveView.Socket{}
@@ -645,16 +658,36 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
         root_layout(Map.put(var!(assigns), :inner_content, wrapped))
       end
 
+    render_clause(
+      status,
+      timed(MishkaCmsCore.Runtime.RenderMetrics.measured?(module), status, body)
+    )
+  end
+
+  defp render_clause(:default, body) do
     quote do
-      def render(var!(conn), unquote(status)) do
-        unquote(timed(MishkaCmsCore.Runtime.RenderMetrics.measured?(module), status, body))
+      def render(var!(conn), var!(status)) when is_integer(var!(status)) do
+        unquote(body)
       end
     end
   end
 
+  defp render_clause(status, body) do
+    quote do
+      def render(var!(conn), unquote(status)) do
+        unquote(body)
+      end
+    end
+  end
+
+  # What an entry draws with as `@status`: its own status, and for the `:default` entry the code asked
+  # for.
+  defp drawn_status(:default), do: quote(do: var!(status))
+  defp drawn_status(status), do: status
+
   # Timed by `MishkaCmsCore.Runtime.RenderMetrics` per status — a 404 page's numbers are the 404s
-  # visitors hit — chosen here, when the module is built, so a draft preview's module gets the body
-  # alone.
+  # visitors hit, and `:default` counts every code that entry answered — chosen here, when the module
+  # is built, so a draft preview's module gets the body alone.
   defp timed(true, status, body) do
     quote do
       MishkaCmsCore.Runtime.RenderMetrics.measure({__MODULE__, unquote(status)}, fn ->
@@ -665,7 +698,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
 
   defp timed(false, _status, body), do: body
 
-  # The status an entry's clauses match on: a code, or `:offline` however it was spelled.
+  # The status an entry's clauses match on: a code, or `:offline` or `:default` however it was spelled.
   defp entry_status(%{status: status}), do: ErrorStatus.parse(status) || status
 
   # Compile template string into executable AST.

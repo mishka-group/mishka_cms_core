@@ -109,6 +109,25 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandlerTest do
       assert content =~ "layout-class"
     end
 
+    test "the default entry's template and layout are carried like a code's" do
+      record =
+        struct(MishkaCmsCore.Runtime.ErrorPage,
+          helpers: [],
+          error_pages: [
+            %{
+              status: :default,
+              template: ~s(<p class="default-class">oops</p>),
+              layout: %{"template" => ~s(<div class="default-layout">{@inner_content}</div>)}
+            }
+          ]
+        )
+
+      content = BootHandler.build_error_template_content(record)
+
+      assert content =~ "default-class"
+      assert content =~ "default-layout"
+    end
+
     test "a job's data carries them the same way" do
       data = %{
         "root_layout_template" => ~s(<body class="root-class"><%= @inner_content %></body>),

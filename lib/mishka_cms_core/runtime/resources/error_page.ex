@@ -17,6 +17,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
   for, and draws its built-in page when the site has no such entry. See
   `MishkaCmsCore.Runtime.ErrorStatus`.
 
+  And one optional status stands for the codes a site has no entry for: `:default`, whose page answers
+  each of them with the code it was asked for. Without it such a code answers its plain status phrase.
+
   The resource supports priority-based path matching for flexible error handling strategies,
   helper functions for dynamic content generation, and optional precompilation for improved
   performance. It implements soft deletion through archival, allowing error configurations
@@ -770,7 +773,8 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
           end
 
           # `:offline` is the page an offline site shows, answered as a 503 by
-          # `MishkaCms.Plugs.MaintenanceGate`; the codes are the ones a failed request answers with.
+          # `MishkaCms.Plugs.MaintenanceGate`; `:default` is the page of every code with no entry of
+          # its own; the codes are the ones a failed request answers with.
           nested_field :status, :select do
             options MishkaCmsCore.Runtime.ErrorStatus.choices()
 
@@ -1706,7 +1710,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
                     ]
                   ]
 
-      description "Array of error page configurations: an HTTP status code or :offline, a template and a layout"
+      description "Array of error page configurations: an HTTP status code, :default or :offline, a template and a layout"
     end
 
     attribute :helpers, {:array, MishkaCmsCore.Runtime.Resources.Embeddeds.Helper} do
@@ -1765,7 +1769,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     end
 
     calculate :configured_statuses, {:array, MishkaCmsCore.Runtime.ErrorStatus} do
-      description "Extracts and sorts all configured statuses (HTTP codes, then :offline) from error pages array"
+      description "Extracts and sorts all configured statuses (HTTP codes, then :default and :offline) from error pages array"
 
       calculation fn records, _context ->
         Enum.map(records, fn error_page ->

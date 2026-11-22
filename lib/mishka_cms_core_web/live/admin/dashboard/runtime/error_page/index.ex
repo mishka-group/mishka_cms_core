@@ -173,7 +173,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
   def handle_event("preview_set_source", %{"source" => source}, socket),
     do: {:noreply, PreviewHelpers.set_preview_source(socket, source)}
 
-  # The picker sends `offline` for the page an offline site shows, beside the codes.
+  # The picker sends `offline` for the page an offline site shows and `default` for the page of every
+  # code with no entry, beside the codes.
   @impl true
   def handle_event("preview_set_error", %{"status" => status}, socket),
     do: {:noreply, PreviewHelpers.set_error_status(socket, ErrorStatus.parse(status))}
