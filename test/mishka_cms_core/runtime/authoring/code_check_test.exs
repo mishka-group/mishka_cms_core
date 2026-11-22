@@ -257,9 +257,92 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
     end
   end
 
+  # Tells the test, while a check compiles, which process compiles it and under what name, and waits
+  # there when it is asked to.
+  defmodule Compiling do
+    @moduledoc false
+    defmacro tell do
+      send(CodeCheckTest, {:compiling, self(), __CALLER__.module})
+      :ok
+    end
+
+    defmacro tell_and_wait do
+      send(CodeCheckTest, {:compiling, self(), __CALLER__.module})
+      receive do: (:go -> :ok)
+    end
+  end
+
+  defp telling(macro) do
+    code = "require #{inspect(Compiling)}; #{inspect(Compiling)}.#{macro}(); {:noreply, socket}"
+    page(events: [%{name: "e", code: code}])
+  end
+
+  defp compiling do
+    receive do: ({:compiling, compiler, name} -> {compiler, name})
+  end
+
+  defp compiled_as, do: elem(compiling(), 1)
+
+  # A name is an atom, and what its functions leave in the VM's tables, for good.
+  describe "the names checks compile under" do
+    @names MishkaCms.ModuleCompilerHandlerRegistry
+
+    setup do
+      Process.register(self(), CodeCheckTest)
+      :ok
+    end
+
+    test "are the same ones over and over" do
+      names =
+        for _check <- 1..10 do
+          assert CodeCheck.check(telling("tell")) == :ok
+          compiled_as()
+        end
+
+      assert names |> Enum.uniq() |> length() == 1
+    end
+
+    # Elixir makes a module to run a module's body in, and does not take it back.
+    test "are the only modules a compile makes" do
+      assert CodeCheck.check(page([])) == :ok
+      assert Code.get_compiler_option(:module_definition) == :interpreted
+    end
+
+    test "are held by one check at a time" do
+      checks =
+        for _check <- 1..3, do: Task.async(fn -> CodeCheck.check(telling("tell_and_wait")) end)
+
+      held = for _check <- checks, do: compiling()
+      assert held |> Enum.uniq_by(&elem(&1, 1)) |> length() == 3
+
+      Enum.each(held, fn {compiler, _name} -> send(compiler, :go) end)
+      assert Task.await_many(checks, 60_000) == [:ok, :ok, :ok]
+    end
+
+    test "are free again when the check that held one is killed as it compiles" do
+      check = spawn(fn -> CodeCheck.check(telling("tell_and_wait")) end)
+      {compiler, name} = compiling()
+
+      ref = Process.monitor(compiler)
+      Process.exit(check, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^compiler, _killed}
+
+      assert CodeCheck.check(telling("tell")) == :ok
+      assert Registry.lookup(@names, {CodeCheck, name}) == []
+      assert Registry.lookup(@names, {CodeCheck, compiled_as()}) == []
+    end
+
+    test "are not waited for: a check that finds none free compiles under one of its own" do
+      names = for number <- 1..64, do: Module.concat(CodeCheck, "C#{number}")
+      for name <- names, do: {:ok, _owner} = Registry.register(@names, {CodeCheck, name}, nil)
+
+      assert CodeCheck.check(telling("tell")) == :ok
+      refute compiled_as() in names
+    end
+  end
+
   describe "the check leaves nothing behind" do
-    # A rehearsal must never be left loaded. The name is unique per check — that is what lets checks
-    # run at once without purging each other — so what matters is that none of them survives.
+    # A rehearsal must never be left loaded: none of the names checks compile under survives one.
     #
     # The count is the VM's, which is why this module is sync; see the moduledoc.
     test "no candidate module is left loaded" do

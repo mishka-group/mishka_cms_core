@@ -157,6 +157,12 @@ defmodule MishkaCmsCore.Application do
     # before anything can compile a page, layout or component.
     :persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
 
+    # A page, layout, component or error page is compiled while the node serves, and again at each save
+    # and each check of one. Compiling a module's body makes a module of its own for it
+    # (`elixir_compiler_1`, `_2`, …), which Elixir does not take back: an atom and 3 to 12 KB of code a
+    # compile. An interpreted body makes none, and the compiled module is the same.
+    Code.put_compiler_option(:module_definition, :interpreted)
+
     # `MishkaCmsCore.PubSub` first: every resource broadcasts on it, and the editor's `Presence`
     # tracks on it. `:mishka_cms_core` is a dependency of every extension and of the host, so its
     # application starts before theirs and the PubSub is up before any of their children. What needs

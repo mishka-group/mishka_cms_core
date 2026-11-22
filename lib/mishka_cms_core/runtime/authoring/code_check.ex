@@ -38,7 +38,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
 
   Compiling a page means expanding `use MishkaCmsWeb, :live_view`, which is about a second of work,
   so the budget is generous: it is here to catch a macro that never returns, not to police a busy
-  machine. Checks do not wait for each other — each compiles under a name of its own — so the
+  machine. Checks do not wait for each other — each compiles under a name no other holds — so the
   deadline only ever covers one compile.
 
   ## Fidelity
@@ -125,7 +125,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     params = %{
       title: "code_check",
       site: "code_check",
-      error_module: candidate(),
+      error_module: nil,
       error_pages: Map.get(error_page, :error_pages) || [],
       root_layout_template: presence(Map.get(error_page, :root_layout_template)),
       helpers: listed(error_page, :helpers)
@@ -257,7 +257,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   defp params(page) do
     %{
       title: "code_check",
-      page_module: candidate(),
+      page_module: nil,
       template: Map.get(page, :template) || "",
       events: listed(page, :events),
       infos: listed(page, :infos),
@@ -386,23 +386,53 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # one, and a suite that creates pages in sixteen parallel cases took twice as long and failed
   # fourteen tests on ExUnit's own timeout.
   #
-  # A unique name has neither problem and costs one atom per check. Atoms are never collected, so
-  # that is a real cost and worth stating: a site saving a hundred pages a day would take about
-  # thirty years to reach the default limit, and a restart clears it. This runtime already mints a
-  # module atom for every page, component and layout it compiles.
+  # A name made for each check has neither problem and is never given back: the atom stays, and so do
+  # the entries a module's functions leave in the VM's tables, about 6 KB a check. So the names are
+  # these, each held by the process that compiles under it and free again the moment that process
+  # ends, however it ends. A name that Elixir has not yet let go of is passed over, and a check that
+  # finds none free makes one, as every check did.
+  @candidates for number <- 1..64, do: Module.concat(__MODULE__, "C#{number}")
+  @registry MishkaCms.ModuleCompilerHandlerRegistry
+
+  defp under_name(fun) do
+    case Enum.find(@candidates, &held?/1) do
+      nil ->
+        fun.(new_candidate())
+
+      name ->
+        result = fun.(name)
+        let_go(name)
+        result
+    end
+  end
+
+  defp held?(name) do
+    with {:ok, _owner} <- Registry.register(@registry, {__MODULE__, name}, nil),
+         true <- Module.open?(name) do
+      let_go(name)
+      false
+    else
+      false -> true
+      {:error, {:already_registered, _pid}} -> false
+    end
+  end
+
+  defp let_go(name), do: Registry.unregister(@registry, {__MODULE__, name})
+
+  # A number of the VM's own, not text from a request.
   # sobelow_skip ["DOS.ModuleConcat"]
-  defp candidate,
-    do: Module.concat(__MODULE__, "C#{System.unique_integer([:positive])}")
+  defp new_candidate,
+    do: Module.concat(__MODULE__, "Check#{System.unique_integer([:positive])}")
 
   defp module_faults(params) do
-    case within_budget(fn -> compile(params) end) do
+    case within_budget(&compile(%{params | page_module: &1})) do
       :ok -> :ok
       {:error, fault} -> {:error, [fault]}
     end
   end
 
   defp error_page_fault(params) do
-    case within_budget(fn -> blamed(params) end) do
+    case within_budget(&blamed(%{params | error_module: &1})) do
       {:error, %{} = out_of_time} -> {:error, {:error_pages, out_of_time}}
       result -> result
     end
@@ -431,7 +461,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   end
 
   defp within_budget(fun) do
-    task = Task.async(MishkaGervaz.Messages.in_caller_locale(fun))
+    task = Task.async(MishkaGervaz.Messages.in_caller_locale(fn -> under_name(fun) end))
 
     case Task.yield(task, @compile_budget) || Task.shutdown(task, :brutal_kill) do
       {:ok, result} ->
@@ -535,8 +565,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
     end
   end
 
-  # The rehearsal module's name is `C80201` and nothing else in the world calls the page that. It
-  # turns up in the middle of otherwise readable sentences — "expected …CodeCheck.C80201 to define
+  # The rehearsal module's name is `C2` and nothing else in the world calls the page that. It
+  # turns up in the middle of otherwise readable sentences — "expected …CodeCheck.C2 to define
   # such a function" — so it is spelled the way the author thinks of it.
   defp unname(message, module) when is_binary(message),
     do: String.replace(message, inspect(module), gettext("this code"))
