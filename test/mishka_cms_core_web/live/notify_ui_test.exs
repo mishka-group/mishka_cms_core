@@ -166,6 +166,35 @@ defmodule MishkaCmsCoreWeb.Test.NotifyUITest do
     end
   end
 
+  # The question is the browser's own confirm (`data-confirm`), so a browser that dismisses it sends
+  # nothing; answered, the row leaves the inbox and stays gone after a reload.
+  test "Delete on the inbox asks first, then removes only that row, for good", %{conn: conn} do
+    admin = create_admin("boss@example.com")
+
+    for title <- ["Drop me", "Keep me"],
+        do: Notify.deliver({:user, admin.id}, %{type: "test:x", title: title})
+
+    drop = Ash.read_one!(Ash.Query.filter(Notification, title == "Drop me"), authorize?: false)
+
+    conn = log_in(conn, admin)
+    {:ok, view, _html} = live(conn, "/admin/dashboard/notifications")
+    render_async(view)
+
+    delete =
+      element(view, ~s([data-role="nrow"] button[title="Delete"][phx-value-id="#{drop.id}"]))
+
+    assert render(delete) =~ ~s(data-confirm="Remove this notification?")
+
+    render_click(delete)
+    refute render(view) =~ "Drop me"
+    assert render(view) =~ "Keep me"
+
+    {:ok, reloaded, _html} = live(conn, "/admin/dashboard/notifications")
+    html = render_async(reloaded)
+    refute html =~ "Drop me"
+    assert html =~ "Keep me"
+  end
+
   test "'Mark all read' sends one broadcast for all the notifications it reads" do
     admin = create_admin("boss@example.com")
 
