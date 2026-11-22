@@ -62,10 +62,14 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
     do: {:error, field: :path, message: dgettext_noop("errors", "Path must be a string.")}
 
   defp validate_path(path, resource) do
-    cond do
-      resource not in [ErrorPage, ErrorPageDraft] and ErrorAddress.reserved?(path) ->
-        error(dgettext_noop("errors", "This path is kept for the site's error pages"))
+    case resource not in [ErrorPage, ErrorPageDraft] and ErrorAddress.reserved?(path) do
+      true -> error(dgettext_noop("errors", "This path is kept for the site's error pages"))
+      false -> validate_format(path)
+    end
+  end
 
+  defp validate_format(path) do
+    cond do
       !String.starts_with?(path, "/") ->
         error(dgettext_noop("errors", "Path must start with '/'"))
 
