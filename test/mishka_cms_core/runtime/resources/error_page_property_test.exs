@@ -389,7 +389,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPagePropertyTest do
             name <- string(:alphanumeric, min_length: 3, max_length: 15),
             path <- valid_path_generator(),
             status_codes <-
-              list_of(member_of([400, 401, 403, 404, 422, 500, 502, 503]),
+              uniq_list_of(member_of([400, 401, 403, 404, 422, 500, 502, 503]),
                 min_length: 1,
                 max_length: 5
               )
@@ -922,7 +922,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPagePropertyTest do
   end
 
   defp valid_error_pages_generator do
-    list_of(
+    uniq_list_of(
       fixed_map(%{
         status: member_of([400, 401, 403, 404, 422, 500, 502, 503, 504]),
         template:
@@ -942,6 +942,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPagePropertyTest do
             constant(nil)
           ])
       }),
+      uniq_fun: & &1.status,
       min_length: 1,
       max_length: 5
     )

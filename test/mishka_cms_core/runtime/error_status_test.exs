@@ -90,12 +90,65 @@ defmodule MishkaCmsCore.Runtime.ErrorStatusTest do
       assert Enum.map(stored, & &1["status"]) == [404, "offline", "default"]
     end
 
-    test "with two default entries is stored, as one with two 404 entries is", %{site: site} do
-      for {status, site} <- [{404, site}, {:default, create_site!()}] do
-        error_page = create!(site, [entry(status), entry(status)])
+    test "refuses a second entry for a status, naming it, however its status is spelled", %{
+      site: site
+    } do
+      for {status, again} <- [{404, "404"}, {:default, "default"}, {:offline, "offline"}] do
+        assert {:error, %Ash.Error.Invalid{errors: [error]}} =
+                 create(site, [entry(500), entry(status), entry(again)])
 
-        assert Enum.map(error_page.error_pages, & &1.status) == [status, status]
+        assert error.field == :error_pages
+        assert error.message =~ "Entry 3"
+        assert error.message =~ "#{status} page"
       end
+
+      error_page = create!(site, [entry(404), entry(:default)])
+
+      for {action, tenant} <- [update: site.id, master_update: nil] do
+        assert {:error, %Ash.Error.Invalid{errors: [%{field: :error_pages}]}} =
+                 error_page
+                 |> Ash.Changeset.for_update(
+                   action,
+                   %{error_pages: [entry(404), entry(:default), entry(:default)]},
+                   tenant: tenant,
+                   authorize?: false
+                 )
+                 |> Ash.update()
+      end
+    end
+
+    test "refuses a draft that holds two entries for a status when it is published", %{site: site} do
+      draft =
+        ErrorPageDraft
+        |> Ash.Changeset.for_create(:create, attrs(site, [entry(404), entry(404)]),
+          tenant: site.id,
+          authorize?: false
+        )
+        |> Ash.create!()
+
+      assert {:error, %Ash.Error.Invalid{} = error} =
+               draft
+               |> Ash.Changeset.for_update(:publish, %{}, tenant: site.id, authorize?: false)
+               |> Ash.update()
+
+      assert Exception.message(error) =~ "second 404 page"
+    end
+
+    # As a row stored before the rule holds them.
+    test "stored with two entries for a status is read and edited as before", %{site: site} do
+      error_page =
+        Ash.Seed.update!(create!(site, [entry(404)]), %{error_pages: [entry(404), entry(404)]})
+
+      held = Ash.get!(ErrorPage, error_page.id, tenant: site.id, authorize?: false)
+      assert Enum.map(held.error_pages, & &1.status) == [404, 404]
+
+      assert {:ok, %{priority: 3}} =
+               held
+               |> Ash.Changeset.for_update(:update, %{priority: 3, error_pages: held.error_pages},
+                 tenant: site.id,
+                 authorize?: false
+               )
+               |> Ash.update()
     end
 
     test "refuses a status that is neither a code nor one of the two names", %{site: site} do

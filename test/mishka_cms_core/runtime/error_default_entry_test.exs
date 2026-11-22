@@ -103,15 +103,20 @@ defmodule MishkaCmsCore.Runtime.ErrorDefaultEntryTest do
     end
   end
 
+  # A write refuses the second, so they are stored as a row written before that holds them.
   test "of two default entries the first answers, as of two 404 entries" do
-    page =
-      page!([
+    page = uncompiled!([entry(404, "<p>ok</p>")])
+
+    Ash.Seed.update!(page.record, %{
+      error_pages: [
         entry(404, "<p>first 404</p>"),
         entry(404, "<p>second 404</p>"),
         entry(:default, "<p>first default</p>"),
         entry(:default, "<p>second default</p>")
-      ])
+      ]
+    })
 
+    assert {:ok, _module} = compile(page)
     assert draw(page, 404) =~ "first 404"
     assert draw(page, 403) =~ "first default"
   end

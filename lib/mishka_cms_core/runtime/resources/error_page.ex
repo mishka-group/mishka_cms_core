@@ -936,6 +936,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     create :create do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorStatusOnce, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
@@ -969,6 +970,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     create :master_create do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorStatusOnce, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
@@ -1003,6 +1005,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     update :update do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorStatusOnce, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
@@ -1038,6 +1041,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     update :master_update do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorStatusOnce, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
@@ -1412,6 +1416,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
                 noun: dgettext_noop("errors", "An error page")}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorStatusOnce, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.ErrorPageCompiles, []},
         before_action?: true
