@@ -136,6 +136,59 @@ defmodule MishkaCmsCore.Runtime.Authoring.SectionTest do
     end
   end
 
+  # The page of every code with no entry of its own sits beside them too, under `default`.
+  describe "an error page's default entry" do
+    @with_default %{
+      error_pages: [
+        %{status: :default, template: "<p>Went wrong</p>"},
+        %{status: :offline, template: "<p>Soon</p>"},
+        %{status: 404, template: "<p>Not here</p>"}
+      ]
+    }
+
+    test "is one of the statuses, between the codes and the offline page" do
+      assert Section.statuses("error-page", @with_default) == [404, :default, :offline]
+    end
+
+    test "opens by the status its address names, and alone by itself" do
+      assert Section.status(@with_default, status: "default") == :default
+      assert Section.editing_status("error-page", @with_default, status: "default") == :default
+
+      assert Section.template("error-page", @with_default, status: "default") ==
+               "<p>Went wrong</p>"
+
+      alone = %{error_pages: [%{"status" => "default", "template" => "<p>Only</p>"}]}
+      assert Section.status(alone, []) == :default
+      assert Section.template("error-page", alone, []) == "<p>Only</p>"
+    end
+
+    test "is the entry a save replaces, the others kept" do
+      fields = Section.save_fields("error-page", "<p>Sorry</p>", status: "default")
+
+      assert %{"error_pages" => entries} = Section.apply_fields(fields, @with_default)
+
+      assert Enum.map(entries, &{&1["status"], &1["template"]}) == [
+               {:default, "<p>Sorry</p>"},
+               {:offline, "<p>Soon</p>"},
+               {404, "<p>Not here</p>"}
+             ]
+    end
+
+    test "is offered after the offline page, and opens empty when the record lacks it" do
+      record = %{error_pages: [%{status: 404, template: "<p>Not here</p>"}]}
+
+      assert [:offline, :default | codes] = Section.offered_statuses()
+      assert Enum.all?(codes, &is_integer/1)
+      assert Section.status(record, status: "default") == :default
+      assert Section.template("error-page", record, status: "default") == ""
+      assert Section.statuses("error-page", record, :default) == [404, :default]
+
+      fields = Section.save_fields("error-page", "<p>New</p>", status: "default")
+      assert %{"error_pages" => [_, added]} = Section.apply_fields(fields, record)
+      assert %{"status" => :default, "template" => "<p>New</p>"} = added
+    end
+  end
+
   # A TEMPLATE IS NEVER EMPTY IN THE DATABASE, and an author who deletes everything has a tree that
   # serializes to "". Saved as it was, every autosave was refused and so was the publish.
   describe "an emptied document" do

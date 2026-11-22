@@ -322,8 +322,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
   def sibling_templates(_section, _record, _opts), do: []
 
   @doc """
-  The statuses an error-page record defines, codes in ascending order and then `:offline`. `[]` for
-  every other section — the status tab strip only renders when there is something to switch between.
+  The statuses an error-page record defines, codes in ascending order, then `:default` and `:offline`.
+  `[]` for every other section — the status tab strip only renders when there is something to switch
+  between.
   """
   @spec statuses(String.t(), map() | nil) :: [ErrorStatus.t()]
   def statuses("error-page", record) do
@@ -347,9 +348,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
   def statuses(section, record, _open), do: statuses(section, record)
 
   @doc """
-  The statuses an error page can hold an entry for: the offline page, then the codes the Error Pages
-  offer (`MishkaCmsCore.Runtime.ErrorStatus.choices/0`). One the record lacks is added by opening it
-  in the builder.
+  The statuses an error page can hold an entry for: the offline page, the default page, then the codes
+  the Error Pages offer (`MishkaCmsCore.Runtime.ErrorStatus.choices/0`). One the record lacks is added
+  by opening it in the builder.
   """
   @spec offered_statuses() :: [ErrorStatus.t()]
   def offered_statuses do
@@ -379,7 +380,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
 
   defp normalize_status(status), do: ErrorStatus.parse(status)
 
-  # An entry the form wrote before it was read back spells `offline` as text.
+  # An entry the form wrote before it was read back spells `offline` and `default` as text.
   defp entry_status(entry), do: ErrorStatus.parse(entry["status"])
 
   # Entries are read with string keys whichever way the record holds them: a form's params and a

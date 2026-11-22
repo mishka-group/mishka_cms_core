@@ -1576,6 +1576,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     do: gettext("Redrawn when something it reads changes")
 
   defp status_name(:offline), do: gettext("Offline")
+  defp status_name(:default), do: gettext("Default")
   defp status_name(status), do: to_string(status)
 
   # The setting that turns the render clock on (`MishkaCmsCore.Runtime.RenderMetrics.on?/0`).

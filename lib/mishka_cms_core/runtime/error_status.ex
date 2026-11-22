@@ -4,27 +4,34 @@
 
 defmodule MishkaCmsCore.Runtime.ErrorStatus do
   @moduledoc """
-  What one entry of a site's Error Page answers for: an HTTP status code (`404`, `500`, …) or
-  `:offline`, the page an offline site shows its visitors.
+  What one entry of a site's Error Page answers for: an HTTP status code (`404`, `500`, …),
+  `:default`, the page for every code the site has no entry of its own for, or `:offline`, the page
+  an offline site shows its visitors.
 
   `:offline` is not an HTTP code. The page it names is answered as a 503 by
   `MishkaCms.Plugs.MaintenanceGate`, at whatever address the visitor asked for, and when a site has
   no such entry the gate draws its built-in page instead.
 
+  `:default` is not an HTTP code either. Its page answers a failed request with the code the request
+  has, drawn with that code as `@status` (`MishkaCmsCore.Runtime.Compilers.ErrorCompiler`), and never
+  stands in for `:offline`. A site without it answers such a code with its plain status phrase.
+
   It is the `status` field's type on `MishkaCmsCore.Runtime.ErrorPage` and
   `MishkaCmsCore.Runtime.ErrorPageDraft`, so both store the same thing: a code stays a JSON number,
-  `:offline` is stored as `"offline"` and read back as the atom.
+  `:offline` and `:default` are stored as `"offline"` and `"default"` and read back as the atoms.
 
   `parse/1` is the same reading for everything else that is handed a status as text — the builder's
-  `?status=`, the preview's error-code picker, the Code tab's `<!-- offline -->` markers.
+  `?status=`, the preview's error-code picker, the Code tab's `<!-- offline -->` and
+  `<!-- default -->` markers.
   """
   use Ash.Type
   use Gettext, backend: MishkaCmsCore.Gettext
 
   @offline :offline
+  @default :default
 
-  # The codes the Error Page form offers, beside `:offline`. A request that fails is answered with
-  # one of these; their labels are Plug's own reason phrases.
+  # The codes the Error Page form offers, beside `:offline` and `:default`. A request that fails is
+  # answered with one of these; their labels are Plug's own reason phrases.
   @client_codes [400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415] ++
                   [416, 417, 418, 421, 422, 423, 424, 425, 426, 428, 429, 431, 451]
   @server_codes [500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511]
@@ -72,7 +79,7 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
     511 => gettext_noop("Network Authentication Required")
   }
 
-  @type t :: integer() | :offline
+  @type t :: integer() | :offline | :default
 
   @doc "The status of the page an offline site shows."
   @spec offline() :: :offline
@@ -85,6 +92,8 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
       404
       iex> MishkaCmsCore.Runtime.ErrorStatus.parse("offline")
       :offline
+      iex> MishkaCmsCore.Runtime.ErrorStatus.parse("default")
+      :default
       iex> MishkaCmsCore.Runtime.ErrorStatus.parse("teapot")
       nil
   """
@@ -92,6 +101,8 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
   def parse(status) when is_integer(status), do: status
   def parse(@offline), do: @offline
   def parse("offline"), do: @offline
+  def parse(@default), do: @default
+  def parse("default"), do: @default
 
   def parse(status) when is_binary(status) do
     case Integer.parse(String.trim(status)) do
@@ -111,21 +122,23 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
     do: Enum.any?(entries, &(parse(Map.get(&1, :status)) == @offline))
 
   @doc """
-  The choices the Error Page form offers, `:offline` first, then the client and server error codes
-  by group, in the shape a Gervaz `:select` takes.
+  The choices the Error Page form offers, `:offline` and `:default` first, then the client and server
+  error codes by group, in the shape a Gervaz `:select` takes.
   """
   @spec choices() :: [{String.t(), String.t() | [{String.t(), integer()}]}]
   def choices do
     [
       {gettext_noop("Offline (the page an offline site shows)"), "offline"},
+      {gettext_noop("Default (any error with no page of its own)"), "default"},
       {gettext_noop("Client errors"), for(code <- @client_codes, do: {code_label(code), code})},
       {gettext_noop("Server errors"), for(code <- @server_codes, do: {code_label(code), code})}
     ]
   end
 
-  @doc "A status as a person reads it: `404 · Not Found`, or `Offline`."
+  @doc "A status as a person reads it: `404 · Not Found`, `Offline` or `Default`."
   @spec label(t()) :: String.t()
   def label(@offline), do: gettext("Offline")
+  def label(@default), do: gettext("Default")
 
   def label(code) when code in @client_codes or code in @server_codes,
     do: gettext("%{code} · %{reason}", code: code, reason: reason(code))
@@ -158,9 +171,10 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
   def dump_to_native(nil, _constraints), do: {:ok, nil}
   def dump_to_native(code, _constraints) when is_integer(code), do: {:ok, code}
   def dump_to_native(@offline, _constraints), do: {:ok, "offline"}
+  def dump_to_native(@default, _constraints), do: {:ok, "default"}
   def dump_to_native(_value, _constraints), do: :error
 
   @impl Ash.Type
   def generator(_constraints),
-    do: StreamData.one_of([StreamData.member_of([404, 500]), StreamData.constant(@offline)])
+    do: StreamData.member_of([404, 500, @offline, @default])
 end
