@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssetsTest do
   use ExUnit.Case, async: true
   @moduletag :unit
 
-  alias MishkaCmsCore.Runtime.{DraftPreviewAssets, Layout, PageDraft}
+  alias MishkaCmsCore.Runtime.{DraftPreviewAssets, Layout, PageDraft, RuntimePreview}
   alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
   alias MishkaCmsCore.Runtime.States.AssetsState
 
@@ -115,11 +115,39 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssetsTest do
       DraftPreviewAssets.unload_module(layout)
     end
 
-    test "answers a template that does not compile with its error" do
+    test "answers a template that does not compile with its fault" do
       record = draft(template: "<p>{undefined_helper()}</p>", helpers: [])
 
-      assert {:error, message} = DraftPreviewAssets.ensure_module(record, nil)
-      assert message =~ "undefined_helper"
+      assert {:error, fault} = DraftPreviewAssets.ensure_module(record, nil)
+      assert fault.message =~ "undefined_helper"
+      refute fault.message =~ "MishkaCmsCore"
+
+      note = RuntimePreview.note_body(fault, nil)
+      assert note =~ "does not compile."
+      assert note =~ "undefined_helper"
+    end
+
+    test "answers one the compiler cannot read with its line, for a page and for a layout" do
+      page = draft(template: "<p>a</p>\n<div><p>a</div>", helpers: [])
+
+      layout =
+        struct!(Layout,
+          id: Ash.UUID.generate(),
+          name: "shell",
+          path: "/layouts/shell",
+          preview_token: token(),
+          template: page.template,
+          updated_at: page.updated_at
+        )
+
+      for record <- [page, layout] do
+        assert {:error, fault} = DraftPreviewAssets.ensure_module(record, nil)
+
+        note = RuntimePreview.note_body(fault, nil)
+        assert note =~ "This template does not compile."
+        assert note =~ "Line 2: unmatched closing tag"
+        refute note =~ "only exists when served live"
+      end
     end
   end
 

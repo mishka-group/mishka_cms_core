@@ -27,7 +27,7 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   site, and `MishkaCmsWeb.DraftPreviewLive` unloads it when the preview closes.
   """
   alias MishkaCmsCore.Runtime.{Layout, LayoutDraft, Page, PageDraft, PreviewHooks}
-  alias MishkaCmsCore.Runtime.Authoring.{Drafts, ElementCss}
+  alias MishkaCmsCore.Runtime.Authoring.{CodeCheck, Drafts, ElementCss}
 
   alias MishkaCmsCore.Runtime.Compilers.{
     Helpers,
@@ -131,8 +131,9 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
 
   @doc """
   The module a Page, Layout or one of their drafts is previewed with, compiled if missing or older
-  than the record, against `asset_site`'s hooks. `{:ok, module}`, or `{:error, message}` when it
-  does not compile.
+  than the record, against `asset_site`'s hooks. `{:ok, module}`, or `{:error, reason}` when it does
+  not compile, for `MishkaCmsCore.Runtime.RuntimePreview.note_body/2` to say: a
+  `MishkaCmsCore.Runtime.Authoring.CodeCheck` fault, or a message.
 
   A compile is the `[:mishka_cms, :runtime, :draft_preview, :compile]` span, with the `module` as its
   metadata: it starts in the calling process before it asks for the module's lock, and stops with
@@ -205,8 +206,11 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
 
   defp compile_unless_current(true, _record, module, _revision, _asset_site), do: {:ok, module}
 
-  defp compile_unless_current(false, record, module, revision, asset_site),
-    do: compile_module_alone(record, module, revision, asset_site)
+  # The engine raises for a template it cannot read, so the template is asked of first.
+  defp compile_unless_current(false, record, module, revision, asset_site) do
+    with :ok <- CodeCheck.template(record.template),
+         do: compile_module_alone(record, module, revision, asset_site)
+  end
 
   defp current?(token, module, revision) do
     case AssetsState.get!(token, "module") do
@@ -231,8 +235,12 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
 
         {:ok, module}
 
-      {:error, _module, {error, diagnostics}} ->
-        {:error, failure(error, diagnostics)}
+      # Its line is the module's, which is not the author's: a page's confirmation region is above it.
+      {:error, _module, {error, diagnostics}} when is_exception(error) ->
+        {:error, %{CodeCheck.compile_fault(error, diagnostics, module) | line: nil}}
+
+      {:error, _module, {error, _diagnostics}} ->
+        {:error, message(error)}
 
       {:error, error} ->
         {:error, message(error)}
@@ -263,15 +271,6 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
 
   defp revision(record, asset_site),
     do: "#{inspect(Map.get(record, :updated_at))}:#{Map.get(asset_site || %{}, :id)}"
-
-  # The compiler raises "cannot compile module … (errors have been logged)" and hands the sentence
-  # that names the fault back as a diagnostic, as `MishkaCmsCore.Runtime.Authoring.CodeCheck` reads it.
-  defp failure(error, diagnostics) do
-    case Enum.find(diagnostics, &(&1.severity == :error)) do
-      %{message: message} -> message
-      nil -> message(error)
-    end
-  end
 
   defp message(error) when is_exception(error), do: Exception.message(error)
   defp message(error), do: inspect(error)

@@ -7,6 +7,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreviewTest do
   @moduletag :unit
 
   alias MishkaCmsCore.Runtime.RuntimePreview
+  alias MishkaCmsCore.Runtime.Component
+  alias MishkaCmsCore.Runtime.Layout
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageDraft
   alias MishkaCmsCore.Runtime.ErrorPage
@@ -209,6 +211,76 @@ defmodule MishkaCmsCore.Runtime.RuntimePreviewTest do
 
       refute html =~ "<script>x</script>"
       assert html =~ "&quot;&gt;&lt;script&gt;"
+    end
+  end
+
+  describe "a template that does not compile" do
+    @served_live "only exists when served live"
+
+    # What it says, and nothing of where in the code it was found.
+    defp says_where(html, reason) do
+      assert html =~ "This template does not compile."
+      assert html =~ reason
+      refute html =~ @served_live
+      refute html =~ "MishkaCms"
+      refute html =~ "Phoenix.LiveView"
+      refute html =~ "mishka_cms_runtime"
+      refute html =~ ".ex:"
+    end
+
+    test "is said to be one, with its reason and line, for every kind that is previewed" do
+      broken = "<p>one</p>\n<div>{@a + }</div>"
+      site = %{name: "Global"}
+
+      for {record, resource} <- [
+            {%{name: "Page", template: broken, site: site}, Page},
+            {%{name: "Draft", template: broken, site: site}, PageDraft},
+            {%{name: "Layout", template: broken, site: site}, Layout},
+            {%{name: "Part", examples: [broken], site: site}, Component},
+            {%{name: "Errors", site: site, error_pages: [%{status: 404, template: broken}]},
+             ErrorPage}
+          ] do
+        {html, _note} = RuntimePreview.render_document(record, resource)
+
+        says_where(html, "Line 2: syntax error: expression is incomplete")
+      end
+    end
+
+    test "is said of a tag that is never closed, of an open block and of an unknown struct" do
+      for {template, reason} <- [
+            {"<div>\n<p>a</div>", "Line 2: unmatched closing tag"},
+            {"<%= if true do %>a", "Look for a tag or a block that is not closed"},
+            {"<p>a</p>\n{%Missing{}}", "Line 2: Missing.__struct__/1 is undefined"}
+          ] do
+        page = %{name: "Bad", template: template, site: %{name: "Global"}}
+
+        {html, _note} = RuntimePreview.render_document(page, Page)
+
+        says_where(html, reason)
+      end
+    end
+
+    test "is said of an error page's root layout and of an entry's own" do
+      in_root = error_record(root_layout: "<body>\n<%= if true do %></body>")
+      in_layout = error_record(layout_500: %{template: "<p>{@inner_content</p>"})
+
+      {html, _note} = RuntimePreview.render_error_document(in_root, 500)
+      says_where(html, "Line 2: expected a closing")
+
+      {html, _note} = RuntimePreview.render_error_document(in_layout, 500)
+      says_where(html, "Line 1: ")
+    end
+
+    test "is not what is said of one that needs what only a live page has" do
+      page = %{name: "Bad", template: "<div>{@not_provided}</div>", site: %{name: "Global"}}
+
+      {html, _note} = RuntimePreview.render_document(page, Page)
+
+      assert html =~ @served_live
+      assert html =~ "key :not_provided not found"
+      refute html =~ "does not compile"
+      refute html =~ "Phoenix.LiveView.Socket", "the note printed the assigns it looked in"
+      refute html =~ ".ex:"
     end
   end
 
