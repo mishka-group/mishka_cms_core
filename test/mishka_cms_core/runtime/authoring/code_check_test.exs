@@ -299,7 +299,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
           compiled_as()
         end
 
-      assert names |> Enum.uniq() |> length() == 1
+      assert [_the_only_name] = Enum.uniq(names)
     end
 
     # Elixir makes a module to run a module's body in, and does not take it back.
