@@ -125,23 +125,21 @@ defmodule MishkaCmsCoreWeb.Test.TopbarStatusTest do
                "#admin-topbar-search-phone.size-11[aria-controls=admin-topbar-search-sheet]"
              )
 
-      assert has_element?(
-               view,
-               "#admin-topbar-search-sheet[role=dialog] #admin-topbar-search-sheet-input"
-             )
+      sheet = view |> element("#admin-topbar-search-sheet-portal") |> render()
 
-      assert has_element?(view, "#admin-topbar-search-sheet-close")
+      assert sheet =~ ~s(id="admin-topbar-search-sheet")
+      assert sheet =~ ~s(role="dialog")
+      assert sheet =~ ~s(id="admin-topbar-search-sheet-input")
+      assert sheet =~ ~s(id="admin-topbar-search-sheet-close")
 
       view
-      |> form("#admin-topbar-search-sheet-form", %{"q" => "zzz-nothing"})
-      |> render_change()
+      |> with_target("#admin-topbar-search")
+      |> render_change("search", %{"q" => "zzz-nothing"})
 
       render_async(view)
 
-      assert has_element?(
-               view,
-               "#admin-topbar-search-sheet-results #admin-topbar-search-sheet-empty"
-             )
+      sheet = view |> element("#admin-topbar-search-sheet-portal") |> render()
+      assert sheet =~ ~s(id="admin-topbar-search-sheet-empty")
     end
   end
 
