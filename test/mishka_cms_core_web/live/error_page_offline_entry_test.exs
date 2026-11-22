@@ -203,6 +203,50 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
 
   defp form_id(_view), do: MishkaGervaz.Resource.Info.Form.component_id(ErrorPage) <> "-form"
 
+  defp chip(status), do: "button[phx-click='preview_set_error'][phx-value-status='#{status}']"
+
+  defp drawn_edit(view),
+    do:
+      view
+      |> element("iframe[srcdoc]")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("srcdoc")
+
+  test "an unsaved edit drawn from the Code tab offers its own entries, and draws each", %{
+    conn: conn,
+    row: row
+  } do
+    {:ok, view, _html} = live(conn, @path)
+    send(view.pid, {:row_action, "show_preview_modal", %{"id" => row.id}})
+    render_async(view, 5_000)
+    render_click(view, "preview_edit_code", %{})
+
+    render_submit(view, "preview_code_submit", %{
+      "op" => "rerender",
+      "source" => "<!-- 404 -->\n<p>Not here, again</p>\n\n<!-- default -->\n<p>Any of them</p>"
+    })
+
+    assert has_element?(view, chip(404))
+    assert has_element?(view, chip("default"))
+    refute has_element?(view, chip(500)), "the saved record's entry, which the edit has not"
+    assert [document] = drawn_edit(view)
+    assert document =~ "Not here, again"
+
+    render_click(view, "preview_set_error", %{"status" => "default"})
+
+    assert has_element?(view, chip("default") <> ".bg-sky-600")
+    assert [document] = drawn_edit(view)
+    assert document =~ "Any of them"
+
+    # The original is the saved record still, with its own entries.
+    render_click(view, "preview_set_source", %{"source" => "original"})
+    assert has_element?(view, chip(500))
+    refute has_element?(view, chip("default"))
+
+    assert Enum.map(stored(row).error_pages, & &1.status) == [404, 500]
+  end
+
   # The Code tab's text holds the templates alone.
   test "a Code tab save keeps each entry's layout, of the page and then of the draft it edits", %{
     conn: conn,

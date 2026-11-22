@@ -139,9 +139,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   Returns `{document_html, note}` — `note` is `nil` on a clean render, otherwise a
   short message (the document still renders, showing the message/example inside).
+
+  `status` names the entry of an Error Page to draw, its first one when it has no such entry.
   """
-  def render_document(record, resource, nonce \\ nil) do
-    {html, note} = for_record_site(record, fn -> assemble(record, resource, nonce) end)
+  def render_document(record, resource, nonce \\ nil, status \\ nil) do
+    {html, note} = for_record_site(record, fn -> assemble(record, resource, nonce, status) end)
 
     {Events.preview_document(html, %{
        resource: resource,
@@ -150,6 +152,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
        note: note
      }), note}
   end
+
+  defp assemble(record, resource, nonce, status) when resource in [ErrorPage, ErrorPageDraft],
+    do: error_full_document(record, resolve_status(record, status), nonce)
+
+  defp assemble(record, resource, nonce, _status), do: assemble(record, resource, nonce)
 
   defp assemble(record, Page, nonce),
     do: wrap(record, body(record.template, page_assigns(record), nonce), nonce)
@@ -184,9 +191,6 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
         nonce,
         layout_note(record)
       )
-
-  defp assemble(record, resource, nonce) when resource in [ErrorPage, ErrorPageDraft],
-    do: error_full_document(record, default_status(record), nonce)
 
   defp assemble(record, _resource, nonce),
     do:
@@ -442,8 +446,9 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     end
   end
 
-  # Keep the chosen status when the record actually has it, else fall back to the first one.
-  defp resolve_status(record, status) do
+  @doc "`status` when the Error Page `record` has an entry for it, else its first entry's, if any."
+  @spec resolve_status(map(), term()) :: ErrorStatus.t() | nil
+  def resolve_status(record, status) do
     statuses = error_statuses(record)
     status = ErrorStatus.parse(status)
     if status in statuses, do: status, else: List.first(statuses)
@@ -469,8 +474,6 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
       |> List.wrap()
       |> Enum.map(&estatus/1)
       |> Enum.reject(&is_nil/1)
-
-  defp default_status(record), do: record |> error_statuses() |> List.first()
 
   defp estatus(entry), do: ErrorStatus.parse(string_keys(entry)["status"])
 

@@ -776,13 +776,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   Select which ErrorPage status code (404/500/…) the Preview tab renders. An ErrorPage holds many
   templates; its preview is a full LiveView (`/_preview/error_page/:token?status=…`), so this just
   records the chosen status and bumps the nonce — the modal rebuilds the iframe URL/id to that code.
-  Clears any unsaved-edit doc so the selector always shows the live render.
+  An unsaved edit on screen (`rerender/2`) is drawn again at that status instead.
   """
-  def set_error_status(socket, status),
-    do:
-      put_preview(socket, fn p ->
+  def set_error_status(socket, status) do
+    nonce = socket.assigns[:csp_nonce]
+
+    put_preview(socket, fn
+      %{preview_source: "draft", edit_html: html} = p when is_binary(html) ->
+        draw_edit(%{p | preview_error_status: status}, p.edit_source, nonce)
+
+      p ->
         %{p | preview_error_status: status, edit_html: nil, render_nonce: p.render_nonce + 1}
-      end)
+    end)
+  end
 
   @doc """
   Draw the Preview tab in the page's state `id` (`MishkaCmsCore.Runtime.PreviewStates`): the frame
@@ -895,24 +901,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     nonce = socket.assigns[:csp_nonce]
 
     put_preview(socket, fn p ->
-      {html, error} =
-        RuntimePreview.render_document(
-          put_content(p, source),
-          p.resource,
-          nonce
-        )
-
-      %{
-        p
-        | edit_source: source,
-          edit_html: html,
-          error: error,
-          rendering?: false,
-          render_nonce: p.render_nonce + 1,
-          active_tab: "preview",
-          preview_source: "draft"
-      }
+      draw_edit(
+        %{
+          p
+          | edit_source: source,
+            rendering?: false,
+            active_tab: "preview",
+            preview_source: "draft"
+        },
+        source,
+        nonce
+      )
     end)
+  end
+
+  defp draw_edit(p, source, nonce) do
+    edited = put_content(p, source)
+    status = RuntimePreview.resolve_status(edited, p.preview_error_status)
+    {html, error} = RuntimePreview.render_document(edited, p.resource, nonce, status)
+
+    %{
+      p
+      | edit_html: html,
+        error: error,
+        preview_error_status: status,
+        render_nonce: p.render_nonce + 1
+    }
   end
 
   @doc """
