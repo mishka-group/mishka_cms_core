@@ -168,7 +168,7 @@ defmodule MishkaCmsCore.MixProject do
       mishka_dep(:mishka_gervaz, "~> 0.0.12"),
       # Names and slugs: `MishkaCmsCore.Runtime.Resources.Changes.InternalName` and
       # `MishkaCmsCore.Runtime.Languages.slug_locales/1`.
-      mishka_dep(:mishka_slug, "~> 0.0.1"),
+      mishka_dep(:mishka_slug, "~> 0.0.3"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
