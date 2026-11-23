@@ -190,7 +190,8 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
     `current_user`, `current_site`, `current_path` and `view`.
 
     Typing asks `MishkaCmsCore.Layouts.TopbarSearch.collect/2` after a pause of 250 ms
-    (`phx-debounce`), in a task of the page (`start_async/3`), and lists the groups under the box.
+    (`phx-debounce`), in a task of the page (`MishkaGervaz.Messages.start_async/4`, in the page's
+    locales, site and nonce), and lists the groups under the box.
     While the list is open, ArrowDown and ArrowUp move the highlighted row, Enter opens it, Escape
     and a click outside close the list, and a click on a row opens it. Everything is
     `Phoenix.LiveView.JS` and LiveView bindings: the arrow keys are window key bindings drawn only
@@ -231,13 +232,10 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
       context =
         Map.take(socket.assigns, [:current_user, :current_site, :current_path, :view])
 
-      locale = Gettext.get_locale()
-
       new_socket =
         socket
         |> assign(query: query)
-        |> start_async(:search, fn ->
-          Gettext.put_locale(locale)
+        |> MishkaGervaz.Messages.start_async(:search, fn ->
           {query, TopbarSearch.collect(query, context)}
         end)
 

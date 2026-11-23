@@ -1,3 +1,7 @@
+# Changelog for MishkaCmsCore 0.0.6
+
+- The top bar's search runs in the page's language: it searches through `MishkaGervaz.Messages.start_async/4`, which carries the page's Gettext locales, site and CSP nonce into the task, in place of Phoenix's `start_async/3` with only the default locale put back.
+
 # Changelog for MishkaCmsCore 0.0.5
 
 - Dependencies updated to hammer 7.6.0, postgrex 0.23.0 and, for development, ex_doc 0.40.5. It needs ash_authentication 5.0.0-rc.18 and ash_authentication_phoenix 3.0.0-rc.12, their last release candidates, as 5.0 and 3.0 have no stable release yet. Hammer 7.6.0 changes the leaky and token bucket algorithms; the core uses only `fix_window_per_key`, which it does not touch. assent 0.4.0 and color 1.0.0 stay behind: ash_authentication requires `~> 0.3.2` and image requires `~> 0.13`
