@@ -745,7 +745,13 @@ defmodule MishkaCmsCore.Layouts do
   `notification_count`, the unread notifications.
 
   Below 640px the bar is the phone's, 60px tall: the menu button, the page's heading and the bell
-  (with the user's menu, so Sign out stays in reach). `section` is `@topbar_section`
+  (with the user's menu, so Sign out stays in reach). The heading is two lines at most, a word too
+  long for its line is hyphenated, and it is a little smaller on a narrow phone.
+
+  On a touch screen of any width (a tablet, `pointer-coarse:`) every button of the bar is 44px, the
+  size a finger needs, and the rows of the bell's panel and the status panel keep their 44px rows.
+  The search box gives way to the phone's search button once it has less than 12rem of the bar
+  (a container query), so a crowded bar never draws a box too narrow to read. `section` is `@topbar_section`
   (`MishkaCmsCore.Sidebar.section/1`): its `eyebrow` is drawn small above its `title`, "Admin
   console" and "MishkaCMS" where the sidebar names neither. The search box, the extensions' items
   and the theme toggle are not drawn there.
@@ -789,7 +795,7 @@ defmodule MishkaCmsCore.Layouts do
         }
         title={gettext("Open menu")}
         class={[
-          "hidden size-[39px] shrink-0 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[980px]:flex!",
+          "hidden size-[39px] shrink-0 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] pointer-coarse:size-11 max-[980px]:flex!",
           phone_button()
         ]}
       >
@@ -805,7 +811,7 @@ defmodule MishkaCmsCore.Layouts do
         </div>
         <div
           data-role="title"
-          class="line-clamp-2 break-words font-['Space_Grotesk'] text-[17px] font-semibold leading-[1.15] text-[#17161a]"
+          class="line-clamp-2 break-words hyphens-auto font-['Space_Grotesk'] text-[17px] font-semibold leading-[1.15] text-[#17161a] max-[400px]:text-[15.5px]"
         >
           {(@section.title && label(@section.title)) || "MishkaCMS"}
         </div>
@@ -867,7 +873,7 @@ defmodule MishkaCmsCore.Layouts do
             aria-controls="topbar-status-panel"
             phx-click={JS.toggle(to: "#topbar-status-panel")}
             class={[
-              "flex h-[39px] items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-bold text-[#3a382f] hover:bg-[#f7f6f3]",
+              "flex h-[39px] items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-bold text-[#3a382f] hover:bg-[#f7f6f3] pointer-coarse:h-11",
               phone_button()
             ]}
           >
@@ -898,7 +904,7 @@ defmodule MishkaCmsCore.Layouts do
                 <.link
                   :if={line.link}
                   navigate={line.link}
-                  class="mt-1 inline-flex min-h-11 items-center text-[12px] font-bold text-[#4f4bcc] min-[641px]:min-h-0"
+                  class="mt-1 inline-flex min-h-11 items-center text-[12px] font-bold text-[#4f4bcc] min-[641px]:pointer-fine:min-h-0"
                 >
                   {gettext("Open")}
                 </.link>
@@ -912,7 +918,8 @@ defmodule MishkaCmsCore.Layouts do
           phx-click={JS.dispatch("phx:set-theme")}
           data-phx-theme="dark"
           title={gettext("Switch to dark")}
-          class="flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:hidden max-[640px]:hidden!"
+          aria-label={gettext("Switch to dark")}
+          class="flex size-[39px] pointer-coarse:size-11 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:hidden max-[640px]:hidden!"
         >
           <.icon name="hero-moon" class="size-[17px]" />
         </button>
@@ -921,7 +928,8 @@ defmodule MishkaCmsCore.Layouts do
           phx-click={JS.dispatch("phx:set-theme")}
           data-phx-theme="light"
           title={gettext("Switch to light")}
-          class="hidden size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:flex max-[640px]:hidden!"
+          aria-label={gettext("Switch to light")}
+          class="hidden size-[39px] pointer-coarse:size-11 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:flex max-[640px]:hidden!"
         >
           <.icon name="hero-sun" class="size-[17px] text-[#c8931f]" />
         </button>
@@ -933,7 +941,7 @@ defmodule MishkaCmsCore.Layouts do
             aria-label={gettext("What needs you")}
             phx-click={JS.toggle(to: "#topbar-notifs")}
             class={[
-              "relative flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3]",
+              "relative flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] pointer-coarse:size-11",
               phone_button()
             ]}
           >
@@ -1062,7 +1070,7 @@ defmodule MishkaCmsCore.Layouts do
 
             <.link
               navigate="/admin/dashboard/notifications"
-              class="block px-4 py-3 text-center text-[12.5px] font-semibold text-[#5b57d6] hover:bg-[#faf9f6]"
+              class="block min-h-11 px-4 py-3 text-center text-[12.5px] font-semibold text-[#5b57d6] hover:bg-[#faf9f6]"
             >
               {gettext("View all activity")}
             </.link>
@@ -1075,7 +1083,7 @@ defmodule MishkaCmsCore.Layouts do
             id="topbar-user-button"
             aria-haspopup="menu"
             phx-click={JS.toggle(to: "#topbar-user")}
-            class="flex items-center gap-2.5 rounded-[30px] border border-[#ecebe6] bg-white py-1 ps-1 pe-3 hover:bg-[#f7f6f3]"
+            class="flex items-center gap-2.5 rounded-[30px] border border-[#ecebe6] bg-white py-1 ps-1 pe-3 hover:bg-[#f7f6f3] pointer-coarse:min-h-11 pointer-coarse:ps-1.5"
           >
             <span class="flex size-[31px] items-center justify-center rounded-full bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] font-['Space_Grotesk'] text-[12px] font-bold text-white">
               {avatar_initial(@current_user)}
@@ -1180,7 +1188,7 @@ defmodule MishkaCmsCore.Layouts do
         aria-expanded="true"
         aria-controls={@panel}
         phx-click={fold(@panel)}
-        class="group flex min-h-11 w-full items-center gap-2 rounded-[10px] px-2.5 py-1 text-start hover:bg-[#faf9f6] min-[641px]:min-h-0"
+        class="group flex min-h-11 w-full items-center gap-2 rounded-[10px] px-2.5 py-1 text-start hover:bg-[#faf9f6] min-[641px]:pointer-fine:min-h-0"
       >
         <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]">
           {@group.label}
@@ -1217,7 +1225,7 @@ defmodule MishkaCmsCore.Layouts do
       data-tone={@need.tone}
       {@opens}
       class={[
-        "flex min-h-11 items-start gap-2.5 rounded-[10px] px-2.5 py-2 text-start min-[641px]:min-h-0",
+        "flex min-h-11 items-start gap-2.5 rounded-[10px] px-2.5 py-2 text-start min-[641px]:pointer-fine:min-h-0",
         @need.link && "hover:bg-[#faf9f6]"
       ]}
     >

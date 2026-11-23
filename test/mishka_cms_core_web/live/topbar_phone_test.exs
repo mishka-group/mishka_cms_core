@@ -98,6 +98,30 @@ defmodule MishkaCmsCoreWeb.Test.TopbarPhoneTest do
     end
   end
 
+  describe "on a touch screen" do
+    @touch "pointer-coarse"
+
+    test "every button of the bar is 44 px, and a narrow search is the phone's icon" do
+      html = topbar(section: %{eyebrow: nil, title: "Subscriptions"}, notification_count: 1)
+
+      for selector <-
+            ~w(#admin-menu-button #topbar-bell button[data-phx-theme=dark] button[data-phx-theme=light]),
+          do: assert(classes(html, selector) =~ "#{@touch}:size-11")
+
+      assert classes(html, "#topbar-user-button") =~ "#{@touch}:min-h-11"
+      assert attr(html, "button[data-phx-theme=dark]", "aria-label") == "Switch to dark"
+
+      assert classes(html, "#admin-topbar-search") =~ "@container"
+      assert classes(html, "#admin-topbar-search") =~ "#{@phone}:[container-type:normal]"
+      assert classes(html, "#admin-topbar-search-box") =~ "@max-[12rem]:hidden!"
+      assert classes(html, "#admin-topbar-search-phone") =~ "@max-[12rem]:flex!"
+      assert classes(html, "#admin-topbar-search-form input") =~ "#{@touch}:h-11"
+
+      # A long one-word title is hyphenated, never cut in the middle of a word.
+      assert classes(html, "#admin-phone-section [data-role=title]") =~ "hyphens-auto"
+    end
+  end
+
   defp topbar(assigns) do
     user = create_user_with_permissions!(["admin:dashboard:*"])
 
