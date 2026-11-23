@@ -1,3 +1,7 @@
+# Changelog for MishkaCmsCore 0.0.7
+
+- The line under every admin page names the version too: "© 2026 · Powered by Mishka CMS v0.0.3", the version smaller and in a lighter grey, read from the host application (`MishkaCmsCore.Helpers.host_version/0`). An extension's credit shows the `version:` it gives, and none when it gives none
+
 # Changelog for MishkaCmsCore 0.0.6
 
 - The top bar's search runs in the page's language: it searches through `MishkaGervaz.Messages.start_async/4`, which carries the page's Gettext locales, site and CSP nonce into the task, in place of Phoenix's `start_async/3` with only the default locale put back.
