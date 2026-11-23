@@ -4676,8 +4676,8 @@ msgstr ""
 msgid "Search engines, robots.txt and the sitemap"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts/topbar_search.ex:320
-#: lib/mishka_cms_core/layouts/topbar_search.ex:382
+#: lib/mishka_cms_core/layouts/topbar_search.ex:318
+#: lib/mishka_cms_core/layouts/topbar_search.ex:380
 #, elixir-autogen, elixir-format
 msgid "Search pages, posts, people…"
 msgstr ""
@@ -15813,10 +15813,10 @@ msgstr ""
 msgid "Screen readers have something to announce."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts/topbar_search.ex:315
-#: lib/mishka_cms_core/layouts/topbar_search.ex:338
-#: lib/mishka_cms_core/layouts/topbar_search.ex:351
-#: lib/mishka_cms_core/layouts/topbar_search.ex:381
+#: lib/mishka_cms_core/layouts/topbar_search.ex:313
+#: lib/mishka_cms_core/layouts/topbar_search.ex:336
+#: lib/mishka_cms_core/layouts/topbar_search.ex:349
+#: lib/mishka_cms_core/layouts/topbar_search.ex:379
 #, elixir-autogen, elixir-format
 msgid "Search"
 msgstr ""
@@ -20392,7 +20392,7 @@ msgstr[1] ""
 msgid "Checked just now"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts/topbar_search.ex:360
+#: lib/mishka_cms_core/layouts/topbar_search.ex:358
 #, elixir-autogen, elixir-format
 msgid "Close the search"
 msgstr ""
@@ -20407,7 +20407,7 @@ msgstr ""
 msgid "Needs a look"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts/topbar_search.ex:484
+#: lib/mishka_cms_core/layouts/topbar_search.ex:482
 #, elixir-autogen, elixir-format
 msgid "Nothing matches “%{query}”"
 msgstr ""
@@ -20428,7 +20428,7 @@ msgstr ""
 msgid "Status of this site"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts/topbar_search.ex:487
+#: lib/mishka_cms_core/layouts/topbar_search.ex:485
 #, elixir-autogen, elixir-format
 msgid "Try another word."
 msgstr ""
