@@ -503,6 +503,26 @@ defmodule MishkaCmsCore.SidebarTest do
       assert render_component(&MishkaCmsCore.Layouts.footer_credit/1, shown: false) == ""
       assert render_component(&MishkaCmsCore.Layouts.footer_credit/1, shown: true) =~ "Powered by"
     end
+
+    test "the credit names the host's version, and an extension's credit its own or none" do
+      default = render_component(&MishkaCmsCore.Layouts.footer_credit/1, shown: true)
+      assert default =~ "Mishka CMS"
+
+      case MishkaCmsCore.Helpers.host_version() do
+        "" -> refute default =~ ~r/>\s*v\d/
+        version -> assert default =~ "v#{version}"
+      end
+
+      credit = %{name: "Kept", url: "https://example.com"}
+
+      refute render_component(&MishkaCmsCore.Layouts.footer_credit/1, credit: credit) =~
+               ~r/>\s*v\d/
+
+      versioned = Map.put(credit, :version, "1.2.3")
+
+      assert render_component(&MishkaCmsCore.Layouts.footer_credit/1, credit: versioned) =~
+               "v1.2.3"
+    end
   end
 
   describe "labels — marked where declared, translated where drawn" do

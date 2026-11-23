@@ -366,21 +366,15 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
                [@shop <> "/orders"]
     end
 
-    test "every group can fold, shows how many entries it holds, and only the open page's group is open",
+    test "every group can fold, shows how many entries it holds, and starts open",
          %{user: user} do
       html = sidebar(user, @shop <> "/inbox")
 
+      # Every group starts open; what an admin folds is put back in the browser by `SidebarScroll`.
       for key <- ~w(runtime account plugins) do
         assert attr(html, "button[aria-controls='sb-#{key}']", "data-fold") == [""]
-      end
-
-      # The shop's page is under Plugins: that group starts open, the others folded.
-      refute hidden?(html, "sb-plugins")
-      assert attr(html, "button[aria-controls='sb-plugins']", "aria-expanded") == ["true"]
-
-      for key <- ~w(runtime account) do
-        assert hidden?(html, "sb-#{key}")
-        assert attr(html, "button[aria-controls='sb-#{key}']", "aria-expanded") == ["false"]
+        refute hidden?(html, "sb-#{key}")
+        assert attr(html, "button[aria-controls='sb-#{key}']", "aria-expanded") == ["true"]
       end
 
       assert html

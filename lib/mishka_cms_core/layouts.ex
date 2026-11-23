@@ -30,6 +30,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
+  alias MishkaCmsCore.Helpers
   alias MishkaCmsCore.Layouts.{SidebarStatus, TopbarNeeds, TopbarSearch, TopbarStatus}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
@@ -235,7 +236,7 @@ defmodule MishkaCmsCore.Layouts do
               <button
                 type="button"
                 data-fold
-                aria-expanded={to_string(group_open?(entry, @trail))}
+                aria-expanded="true"
                 aria-controls={dom_id("sb", entry.key)}
                 phx-click={fold(dom_id("sb", entry.key))}
                 class="group mb-1 mt-4 flex w-full items-center gap-2.5 px-[10px] py-1.5"
@@ -257,7 +258,7 @@ defmodule MishkaCmsCore.Layouts do
               </button>
               <div
                 id={dom_id("sb", entry.key)}
-                class={["flex flex-col gap-0.5", !group_open?(entry, @trail) && "hidden"]}
+                class="flex flex-col gap-0.5"
               >
                 <.nav_link :for={item <- entry.items} item={item} trail={@trail} counts={@counts} />
               </div>
@@ -1305,10 +1306,12 @@ defmodule MishkaCmsCore.Layouts do
   end
 
   @doc """
-  The line under every admin page: "© <years> · Powered by <name>", where the name links to the
-  product's own page.
+  The line under every admin page: "© <years> · Powered by <name> v<version>", where the name links
+  to the product's own page and the version, smaller and lighter, is the host application's
+  (`MishkaCmsCore.Helpers.host_version/0`). An extension's credit shows its own `version:` when it
+  gives one, and no version when it does not.
 
-  `credit` is `%{name: name, url: url}` — what `MishkaCmsCore.Layouts.Nav` assigns as
+  `credit` is `%{name: name, url: url}`, with an optional `version`: what `MishkaCmsCore.Layouts.Nav` assigns as
   `@footer_credit` from the extension that owns the page — or `nil` on the core's own pages, which
   credit Mishka CMS. Only "Powered by" is translated; a product name is not. With `shown` false (an
   extension that draws no such line, `MishkaCmsCore.Sidebar.footer?/1`) nothing is drawn.
@@ -1319,7 +1322,8 @@ defmodule MishkaCmsCore.Layouts do
   def footer_credit(%{shown: false} = assigns), do: ~H""
 
   def footer_credit(assigns) do
-    assigns = assign(assigns, :credit, assigns.credit || @default_credit)
+    credit = assigns.credit || Map.put(@default_credit, :version, Helpers.host_version())
+    assigns = assign(assigns, :credit, credit)
 
     ~H"""
     <footer
@@ -1335,6 +1339,12 @@ defmodule MishkaCmsCore.Layouts do
       >
         {@credit.name}
       </a>
+      <span
+        :if={@credit[:version] not in [nil, ""]}
+        class="ml-0.5 text-[10.5px] font-normal text-[#a8a5a0]"
+      >
+        v{@credit[:version]}
+      </span>
     </footer>
     """
   end
@@ -1360,10 +1370,6 @@ defmodule MishkaCmsCore.Layouts do
   defp status_word(_ok), do: gettext("All good")
 
   defp label(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
-
-  # A top group of the sidebar starts open only when it holds the page that is open (its key is in
-  # the trail), so the menu shows where the person is and folds the rest; a press opens any of them.
-  defp group_open?(%{items: items}, trail), do: Enum.any?(items, &(&1.key in trail))
 
   defp group?(%Group{}), do: true
   defp group?(_entry), do: false
