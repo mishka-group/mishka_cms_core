@@ -236,7 +236,7 @@ defmodule MishkaCmsCore.Layouts do
               <button
                 type="button"
                 data-fold
-                aria-expanded={to_string(group_open?(entry, @trail))}
+                aria-expanded="true"
                 aria-controls={dom_id("sb", entry.key)}
                 phx-click={fold(dom_id("sb", entry.key))}
                 class="group mb-1 mt-4 flex w-full items-center gap-2.5 px-[10px] py-1.5"
@@ -258,7 +258,7 @@ defmodule MishkaCmsCore.Layouts do
               </button>
               <div
                 id={dom_id("sb", entry.key)}
-                class={["flex flex-col gap-0.5", !group_open?(entry, @trail) && "hidden"]}
+                class="flex flex-col gap-0.5"
               >
                 <.nav_link :for={item <- entry.items} item={item} trail={@trail} counts={@counts} />
               </div>
@@ -1370,10 +1370,6 @@ defmodule MishkaCmsCore.Layouts do
   defp status_word(_ok), do: gettext("All good")
 
   defp label(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
-
-  # A top group of the sidebar starts open only when it holds the page that is open (its key is in
-  # the trail), so the menu shows where the person is and folds the rest; a press opens any of them.
-  defp group_open?(%{items: items}, trail), do: Enum.any?(items, &(&1.key in trail))
 
   defp group?(%Group{}), do: true
   defp group?(_entry), do: false
