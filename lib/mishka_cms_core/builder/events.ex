@@ -64,6 +64,7 @@ defmodule MishkaCmsCore.Builder.Events do
   | `builder:ai:before_ask` | `%{prompt, scope, backend, section, resource_id, site_id, actor_id, error}` |
   | `builder:form:role` | `%{role, entry}` |
   | `builder:component:notes` | `%{notes, component, attrs, node_id, site_id, site_name}` |
+  | `builder:attr:choices` | `%{choices, source, component, attr, site_id, site_name}` |
   | `page:form:submitted` | `%{form, values, page, site_id, handled}` |
 
   `builder:form:role` carries a component's INFERRED part in a form (`:wrapper`, `:field`,
@@ -76,6 +77,12 @@ defmodule MishkaCmsCore.Builder.Events do
   is left out, the editor cannot resolve it), and a plugin appends `%{severity, message, detail}`
   notes to `notes`, `severity` `:warning` or `:note`. The editor draws them on the canvas, in the
   Inspector and in the Audit rail; a published page never asks. See `component_notes/1`.
+
+  `builder:attr:choices` is where the choices of an attribute come from when they are not in the
+  bundle: the products of the site a block shows, the categories of a blog. The kit names a source in
+  the attribute's `opts.choices` (`"choices": "acme:products"`), and a plugin that knows the source
+  appends `%{value, label}` choices for the site being edited. The Inspector draws them as a select
+  by their labels and writes the value. See `attr_choices/1`.
 
   `page:form:submitted` is the one row here that fires from a published page rather than from the
   editor, and the one whose plugins WRITE. A plugin that stored the submission answers with
@@ -611,6 +618,67 @@ defmodule MishkaCmsCore.Builder.Events do
       %{role: answered} when answered in @form_roles -> answered
       _unchanged -> role
     end
+  end
+
+  @doc """
+  The choices an attribute offers when its kit names a source for them in `opts.choices`, as a list
+  of `%{value: String.t(), label: String.t()}`.
+
+  `meta` says what is asked: `source` (the name in `opts.choices`), `component` (the component's
+  name), `attr` (the attribute's name), `site_id` and `site_name`. Editor only, so a plugin may read
+  what it needs (one read for one source). A plugin that knows the source appends to `:choices`:
+
+      use MishkaInstaller.Event.Hook, event: "builder:attr:choices"
+
+      def call(%{source: "acme:products", site_id: site_id} = payload) do
+        choices = for p <- Acme.products(site_id), do: %{value: p.slug, label: p.title}
+        {:reply, %{payload | choices: payload.choices ++ choices}}
+      end
+
+      def call(payload), do: {:reply, payload}
+
+  A choice of another shape is dropped, and so is a second choice of the same value. With no plugin,
+  while the plugins cannot run, or when one of them raises, exits or answers something that is not
+  the payload, the answer is `[]` and the Inspector draws the attribute as a text box.
+  """
+  @spec attr_choices(map()) :: [%{value: String.t(), label: String.t()}]
+  def attr_choices(meta) when is_map(meta) do
+    "builder:attr:choices"
+    |> MishkaInstaller.Event.Hook.call(Map.put(meta, :choices, []),
+      cannot_run: :none,
+      raised: :none
+    )
+    |> answered_choices()
+  catch
+    :exit, _reason -> []
+    :throw, _value -> []
+  end
+
+  defp answered_choices(%{choices: choices}) when is_list(choices),
+    do: choices |> Enum.filter(&choice?/1) |> Enum.uniq_by(& &1.value)
+
+  defp answered_choices(:none), do: []
+
+  defp answered_choices(other) do
+    Strict.violation!(
+      "Builder.Events.attr_choices/1",
+      "builder:attr:choices answered #{inspect(other)}, expected a map carrying :choices"
+    )
+
+    []
+  end
+
+  defp choice?(%{value: value, label: label}) when is_binary(value) and is_binary(label),
+    do: true
+
+  defp choice?(choice) do
+    Strict.violation!(
+      "Builder.Events.attr_choices/1",
+      "builder:attr:choices answered the choice #{inspect(choice)}, expected " <>
+        "%{value: String.t(), label: String.t()}"
+    )
+
+    false
   end
 
   @doc """

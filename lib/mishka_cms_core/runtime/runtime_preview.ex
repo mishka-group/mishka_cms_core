@@ -321,9 +321,19 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   Public so that an editor's canvas (the `mishka_cms_builder` package's) asks the same question of
   the same engine.
+
+  The variants a site's compile declares come with it
+  (`MishkaCmsCore.Runtime.Compilers.TailwindCompiler.custom_variants/0`), so a `dark:` class the
+  generator makes reads the page's `data-theme` as the published CSS does, not the author's system
+  setting.
   """
   @spec theme_source(String.t() | nil) :: String.t()
-  def theme_source(site_id \\ nil), do: site_id |> stylesheet_source() |> theme_blocks()
+  def theme_source(site_id \\ nil) do
+    case site_id |> stylesheet_source() |> theme_blocks() do
+      "" -> ""
+      blocks -> MishkaCmsCore.Runtime.Compilers.TailwindCompiler.custom_variants() <> blocks
+    end
+  end
 
   @doc """
   The full CSS of the stylesheet rows for `site_id` and the global ones.

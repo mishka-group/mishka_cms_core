@@ -33,7 +33,8 @@ defmodule MishkaCmsCore.Builder.SeamCatalogTest do
   @named ~w(history_query before_draft_save after_draft_save before_comment after_comment
             before_code_apply before_token_set before_class_save before_element_css
             after_element_css before_ask containment preview_document examples preset_choices
-            toolbar_invoked form_role form_customized form_created component_notes)a
+            toolbar_invoked form_role form_customized form_created component_notes
+            attr_choices)a
 
   # Fired by the editor alone. The core collects `icon_libraries`, `interactions` and `js_hooks`,
   # and fires `preview_document` and `form_role`.
@@ -44,7 +45,8 @@ defmodule MishkaCmsCore.Builder.SeamCatalogTest do
   @editor_named ~w(history_query before_draft_save after_draft_save before_comment after_comment
                    before_code_apply before_token_set before_class_save before_element_css
                    after_element_css before_ask containment examples preset_choices
-                   toolbar_invoked form_customized form_created component_notes)a
+                   toolbar_invoked form_customized form_created component_notes
+                   attr_choices)a
 
   defp source do
     Path.wildcard("lib/**/*.ex")
