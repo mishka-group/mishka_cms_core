@@ -114,7 +114,9 @@ defmodule MishkaCmsCore.MixProject do
       {:ash_rate_limiter, "~> 2.0"},
       {:hammer, "~> 7.5"},
       {:remote_ip, "~> 1.2"},
-      {:ash, "~> 3.37"},
+      # 3.38.1 is the first release with both security fixes: forged keysets (CVE-2026-124283), and
+      # keyword input cast with storage casting (CVE-2026-120299).
+      {:ash, "~> 3.38 and >= 3.38.1"},
       # {:ash, github: "ash-project/ash", branch: "main", override: true},
       {:igniter, "~> 0.8", only: [:dev, :test]},
       {:oban, "~> 2.24"},
