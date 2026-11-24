@@ -565,6 +565,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
 
   defp entry_name(entry), do: Map.get(entry, :name)
 
+  defp entry_attrs(%{attrs: attrs}) when is_list(attrs), do: attrs
+  defp entry_attrs(_entry), do: []
+
   defp entry_scope(entry, site) do
     case Map.get(entry, :global?, true) do
       true -> "Global"
@@ -603,8 +606,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   """
   @spec saved(t(), [map()]) :: t()
   def saved(%__MODULE__{} = tree, components) do
-    declared =
-      Map.new(components, &{entry_name(&1), Map.get(&1, :attrs) || Map.get(&1, "attrs") || []})
+    declared = Map.new(components, &{entry_name(&1), entry_attrs(&1)})
 
     %{tree | nodes: Map.new(tree.nodes, fn {id, node} -> {id, saved_node(node, declared)} end)}
   end
