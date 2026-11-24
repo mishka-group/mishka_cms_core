@@ -15,6 +15,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DoctorChecks do
   reads as such on its own row and the window stays usable. A repair button runs that repair, then
   the check again, and the row shows both answers in place.
 
+  A repair that answers `{:started, sentence}` started its work in the background: the row shows the
+  sentence, keeps its buttons busy and listens on `MishkaCmsCore.Install.DoctorChecks.topic/1` of
+  the site (subscribed before the repair runs, so no word of the job is missed) for the job's
+  `progress/3`, which replaces the sentence, and `finished/3`, whose sentence stays when the check
+  has run again. It listens from the repair's own task, for up to
+  `MishkaCmsCore.Install.DoctorChecks.follow_timeout/0`, so the page needs no `handle_info`.
+
   Assigns:
 
     * `:id` — the DOM id `show_doctor/2` sends `"run"` to;
@@ -49,6 +56,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DoctorChecks do
   end
 
   @impl true
+  def update(%{doctor_note: {key, note}}, socket) do
+    new_socket = assign(socket, notes: Map.put(socket.assigns.notes, key, note))
+    {:ok, new_socket}
+  end
+
   def update(assigns, socket) do
     moved? = Map.get(assigns, :site_id, socket.assigns.site_id) != socket.assigns.site_id
     socket = assign(socket, assigns)
@@ -71,14 +83,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DoctorChecks do
          %{check: check, outcome: outcome} <-
            Enum.find(socket.assigns.results, &(&1.check.key == key)),
          {:ok, problem} <- problem(outcome, params["problem"]) do
-      %{site_id: site_id, actor: actor} = socket.assigns
+      %{site_id: site_id, actor: actor, id: id} = socket.assigns
       opts = opts(socket)
+      view = self()
 
       new_socket =
         socket
         |> assign(busy: MapSet.put(socket.assigns.busy, key))
         |> Messages.start_async({:repair, key}, fn ->
-          note = DoctorChecks.repair(check, site_id, actor, problem, opts)
+          :ok = Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, DoctorChecks.topic(site_id))
+
+          note =
+            check
+            |> DoctorChecks.repair(site_id, actor, problem, opts)
+            |> followed({view, id, key})
+
           {note, DoctorChecks.run_one(check, site_id, actor, opts)}
         end)
 
@@ -123,6 +142,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DoctorChecks do
 
     {:noreply, new_socket}
   end
+
+  # A repair that started work in the background is followed until it says it is done; any other
+  # answer is the repair's note as it is.
+  defp followed({:started, _sentence} = note, row) do
+    tell(row, note)
+    follow(row, System.monotonic_time(:millisecond) + DoctorChecks.follow_timeout())
+  end
+
+  defp followed(note, _row), do: note
+
+  defp follow({_view, _id, key} = row, deadline) do
+    receive do
+      {:doctor_check, ^key, {:progress, sentence}} ->
+        tell(row, {:started, sentence})
+        follow(row, deadline)
+
+      {:doctor_check, ^key, {:finished, note}} ->
+        note
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        {:error, gettext("The repair is still running. Check again later to see what it found.")}
+    end
+  end
+
+  defp tell({view, id, key}, note),
+    do: Phoenix.LiveView.send_update(view, __MODULE__, id: id, doctor_note: {key, note})
 
   defp start(%{assigns: %{app: app, site_id: site_id, actor: %{} = actor}} = socket)
        when is_atom(app) and not is_nil(app) and is_binary(site_id) do
@@ -306,5 +351,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DoctorChecks do
   defp note_text(_none), do: nil
 
   defp note_class({:ok, _sentence}), do: "text-[#177a53]"
+  defp note_class({:started, _sentence}), do: "text-[#6d6a63]"
   defp note_class(_error), do: "text-[#c2410c]"
 end

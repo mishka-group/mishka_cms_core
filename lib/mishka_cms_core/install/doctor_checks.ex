@@ -49,6 +49,17 @@ defmodule MishkaCmsCore.Install.DoctorChecks do
   check is never shown to everyone by mistake. A `repair` without a `label` and a `run` of three
   arguments is dropped from its check.
 
+  ## A repair that takes longer than the window
+
+  A repair that cannot finish within the limit (one call to a provider for each of a thousand
+  records) starts its work in the background, a job of its own, and answers
+  `{:started, "Checking 71 prices. The result shows here when it is done."}` at once. The window
+  shows that sentence and keeps the check's buttons busy while it listens, for up to
+  `follow_timeout/0`, on `topic/1` of the site; the job tells it how far it got with `progress/3`
+  and that it is done with `finished/3`, whose sentence the window shows before it runs the check
+  again. The key the job names is the check's `key/2`. A window opened later sees the job's result
+  on "Check again".
+
   ## Who sees what
 
   Only an actor holding the check's `permission` (`MishkaCmsCore.Settings.permitted?/2`) is shown
@@ -68,7 +79,7 @@ defmodule MishkaCmsCore.Install.DoctorChecks do
     * `[:mishka_cms, :doctor_checks, :run]`, once for each check run: measurements `%{duration:
       native}`, metadata `%{app:, site_id:, check:, outcome: :ok | :problems | :timeout | :crashed}`;
     * `[:mishka_cms, :doctor_checks, :repair]`, once for each repair: the same, with `outcome: :ok |
-      :error | :timeout | :crashed | :refused`.
+      :started | :error | :timeout | :crashed | :refused`.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -79,6 +90,7 @@ defmodule MishkaCmsCore.Install.DoctorChecks do
 
   @event "doctor:checks"
   @default_timeout 5_000
+  @default_follow 600_000
   @supervisor MishkaCmsCore.Runtime.TaskSupervisor
 
   @type problem :: %{
@@ -110,6 +122,47 @@ defmodule MishkaCmsCore.Install.DoctorChecks do
   @doc "The mishka_installer event extensions add their checks on."
   @spec event() :: String.t()
   def event, do: @event
+
+  @doc "The key of the check `id` of the group `group_id`, as the window and `finished/3` name it."
+  @spec key(String.t(), String.t()) :: String.t()
+  def key(group_id, id) when is_binary(group_id) and is_binary(id), do: group_id <> ":" <> id
+
+  @doc """
+  The `MishkaCmsCore.PubSub` topic of `site_id`'s checks, on which a repair's background work says
+  how far it got (`progress/3`) and that it is done (`finished/3`).
+  """
+  @spec topic(String.t()) :: String.t()
+  def topic(site_id) when is_binary(site_id), do: "doctor:checks:" <> site_id
+
+  @doc "Tells an open window how far the background repair of the check `key` on `site_id` got."
+  @spec progress(String.t(), String.t(), String.t()) :: :ok | {:error, term()}
+  def progress(site_id, key, sentence) when is_binary(sentence),
+    do: broadcast(site_id, key, {:progress, sentence})
+
+  @doc """
+  Tells an open window that the background repair of the check `key` on `site_id` is done, with
+  `{:ok, sentence}` or `{:error, sentence}`; the window shows it and runs the check again.
+  """
+  @spec finished(String.t(), String.t(), {:ok | :error, String.t()}) :: :ok | {:error, term()}
+  def finished(site_id, key, {kind, sentence} = note)
+      when kind in [:ok, :error] and is_binary(sentence),
+      do: broadcast(site_id, key, {:finished, note})
+
+  @doc """
+  How long, in milliseconds, a window listens for the background repair it started:
+  `config :mishka_cms_core, :doctor_follow_timeout`, ten minutes by default.
+  """
+  @spec follow_timeout() :: non_neg_integer()
+  def follow_timeout,
+    do: Application.get_env(:mishka_cms_core, :doctor_follow_timeout, @default_follow)
+
+  defp broadcast(site_id, key, message),
+    do:
+      Phoenix.PubSub.broadcast(
+        MishkaCmsCore.PubSub,
+        topic(site_id),
+        {:doctor_check, key, message}
+      )
 
   @doc """
   The limit, in milliseconds, of asking the plugins, of one check and of one repair:
@@ -185,12 +238,13 @@ defmodule MishkaCmsCore.Install.DoctorChecks do
 
   @doc """
   Runs `check`'s repair on `site_id` as `actor` for `problem` (`nil` for the check's own repair),
-  within `opts[:timeout]`: `{:ok, sentence}` (the sentence may be `nil`) or `{:error, sentence}`,
-  every sentence plain words for the admin. An actor without the check's permission, or a check with
+  within `opts[:timeout]`: `{:ok, sentence}` (the sentence may be `nil`), `{:started, sentence}` for
+  work it started in the background (see "A repair that takes longer than the window") or
+  `{:error, sentence}`, every sentence plain words for the admin. An actor without the check's permission, or a check with
   no repair, is refused before anything runs.
   """
   @spec repair(check(), String.t(), map(), problem() | nil, keyword()) ::
-          {:ok, String.t() | nil} | {:error, String.t()}
+          {:ok, String.t() | nil} | {:started, String.t()} | {:error, String.t()}
   def repair(check, site_id, actor, problem, opts \\ [])
 
   def repair(%{repair: %{run: run}} = check, site_id, actor, problem, opts) do
@@ -266,6 +320,9 @@ defmodule MishkaCmsCore.Install.DoctorChecks do
        when is_binary(sentence) or is_nil(sentence),
        do: emitted(:repair, check, site_id, :ok, took, {:ok, sentence})
 
+  defp repaired(check, site_id, {:started, sentence}, took) when is_binary(sentence),
+    do: emitted(:repair, check, site_id, :started, took, {:started, sentence})
+
   defp repaired(check, site_id, :ok, took),
     do: emitted(:repair, check, site_id, :ok, took, {:ok, nil})
 
@@ -315,7 +372,7 @@ defmodule MishkaCmsCore.Install.DoctorChecks do
 
     [
       %{
-        key: group_id <> ":" <> id,
+        key: key(group_id, id),
         id: id,
         app: app,
         label: label,

@@ -55,6 +55,7 @@ defmodule MishkaCmsCore.Test.Web.DoctorChecksTest do
       File.rm_rf(dir)
       SiteState.delete(site.id)
       Application.delete_env(:mishka_cms_core, :doctor_check_timeout)
+      Application.delete_env(:mishka_cms_core, :doctor_follow_timeout)
     end)
 
     admin = create_user_with_permissions!([@area], site_id: site.id)
@@ -205,6 +206,87 @@ defmodule MishkaCmsCore.Test.Web.DoctorChecksTest do
 
       assert {:error, sentence} = DoctorChecks.repair(fixable, ctx.site.id, ctx.admin, nil)
       refute sentence =~ "secret detail"
+    end
+  end
+
+  describe "a repair that starts background work" do
+    setup do
+      test = self()
+      {:ok, fixed?} = Agent.start_link(fn -> false end)
+
+      answers([
+        check(
+          "slow",
+          fn ->
+            case Agent.get(fixed?, & &1) do
+              true -> :ok
+              false -> {:problems, [%{id: "p1", text: "One is missing."}]}
+            end
+          end,
+          %{
+            repair: %{
+              label: "Check them all",
+              run: fn _site_id, _actor, _problem ->
+                send(test, :repair_started)
+                {:started, "Checking 3 records. The result shows here."}
+              end
+            }
+          }
+        )
+      ])
+
+      %{fixed?: fixed?, key: DoctorChecks.key("kit_host", "slow")}
+    end
+
+    test "answers what it started", ctx do
+      {:ok, [slow]} = DoctorChecks.collect(:mishka_kit_host, ctx.site.id, ctx.admin)
+
+      assert {:started, "Checking 3 records. The result shows here."} =
+               DoctorChecks.repair(slow, ctx.site.id, ctx.admin, nil)
+    end
+
+    test "is followed in the window until its job says it is done, then the check runs again",
+         %{conn: conn} = ctx do
+      view = open(conn, ctx, ctx.admin)
+      assert has_element?(view, "[data-check='kit_host:slow'][data-outcome=problems]")
+
+      view |> element("[data-check='kit_host:slow'] [data-role=check-repair]") |> render_click()
+
+      # The window listens before the repair runs, so the job's words that follow reach it.
+      assert_receive :repair_started
+      assert :ok = DoctorChecks.progress(ctx.site.id, ctx.key, "Checked 2 of 3.")
+      Agent.update(ctx.fixed?, fn _ -> true end)
+      assert :ok = DoctorChecks.finished(ctx.site.id, ctx.key, {:ok, "All 3 are there."})
+
+      render_async(view)
+
+      assert has_element?(view, "[data-check='kit_host:slow'][data-outcome=ok]")
+
+      assert has_element?(
+               view,
+               "[data-check='kit_host:slow'] [data-role=repair-note]",
+               "All 3 are there."
+             )
+
+      refute has_element?(view, "[data-check='kit_host:slow'] [data-role=check-repair][disabled]")
+    end
+
+    test "a job that says nothing within the limit leaves a plain line and frees the row",
+         %{conn: conn} = ctx do
+      Application.put_env(:mishka_cms_core, :doctor_follow_timeout, 0)
+      view = open(conn, ctx, ctx.admin)
+
+      view |> element("[data-check='kit_host:slow'] [data-role=check-repair]") |> render_click()
+      assert_receive :repair_started
+      render_async(view)
+
+      assert has_element?(
+               view,
+               "[data-check='kit_host:slow'] [data-role=repair-note]",
+               "still running"
+             )
+
+      refute has_element?(view, "[data-check='kit_host:slow'] [data-role=check-repair][disabled]")
     end
   end
 
