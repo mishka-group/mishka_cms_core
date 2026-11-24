@@ -25,6 +25,10 @@ defmodule MishkaCmsCore.Test.KitUpgradeHostLive do
 
   The flash is rendered here because there is no admin layout around an isolated view, and a refusal
   this answers with is the whole of what some of these tests assert.
+
+  `"actor_id"` names the admin the modal's checks (`MishkaCmsCore.Install.DoctorChecks`) are run
+  as and `"site_id"` the site it opens on; the button `#open-doctor`
+  opens it the way a dashboard's wrench does (`ExtensionInstallerPanel.show_doctor/2`).
   """
 
   use Phoenix.LiveView
@@ -38,7 +42,9 @@ defmodule MishkaCmsCore.Test.KitUpgradeHostLive do
      socket
      |> assign(:sites, session["sites"] || [])
      |> assign(:may_upgrade?, Map.get(session, "may_upgrade?", true))
+     |> assign(:actor, actor(session["actor_id"]))
      |> ExtensionInstallerPanel.setup(app: :mishka_kit_host, noun: "test extension")
+     |> on_site(session["site_id"])
      |> KitUpgradePanel.setup(
        bundle: session["bundle"],
        noun: "test components",
@@ -85,6 +91,10 @@ defmodule MishkaCmsCore.Test.KitUpgradeHostLive do
       <div id="kit-flash-error">{Phoenix.Flash.get(@flash, :error)}</div>
       <div id="kit-flash-success">{Phoenix.Flash.get(@flash, :success)}</div>
 
+      <button id="open-doctor" type="button" phx-click={ExtensionInstallerPanel.show_doctor("kit")}>
+        Open
+      </button>
+
       <ExtensionInstallerPanel.doctor_modal
         id="kit"
         install_id="kit-install"
@@ -93,10 +103,23 @@ defmodule MishkaCmsCore.Test.KitUpgradeHostLive do
         sites={@sites}
         allowed?={@may_upgrade?}
         title="Test components"
+        actor={@actor}
       />
     </div>
     """
   end
+
+  defp actor(nil), do: nil
+
+  defp actor(id),
+    do:
+      Ash.get!(MishkaCmsCore.Accounts.User, id,
+        load: [:permissions, :permission_values],
+        authorize?: false
+      )
+
+  defp on_site(socket, nil), do: socket
+  defp on_site(socket, site_id), do: ExtensionInstallerPanel.choose(socket, site_id)
 
   # A SITE WHOSE ROW HAS GONE, which is what `"raise"` stands in for: an extension's own
   # `sample_pages/1` reads the site before it can name it in a template, and raises exactly this

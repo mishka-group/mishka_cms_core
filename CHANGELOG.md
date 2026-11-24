@@ -1,5 +1,6 @@
 # Changelog for MishkaCmsCore 0.0.7
 
+- An extension adds checks of its own to its "check and repair" window on the new `doctor:checks` event (`MishkaCmsCore.Install.DoctorChecks`): each check has an id, a label, a permission area, a `run(site_id, actor)` that answers `:ok` or its problems in plain words, and an optional repair with a label and a `run(site_id, actor, problem)`. The window (`doctor_modal/1` given `actor`) lists them under the extension's name when it is opened with `ExtensionInstallerPanel.show_doctor/2` (the dashboard's wrench), shows a check only to an admin holding its area, and runs a repair and then the check again in place. The plugins, every check and every repair run in a task of their own within `config :mishka_cms_core, :doctor_check_timeout` (5 seconds), so a slow or broken one reads as such on its own row and the window stays open
 - Every group of the admin sidebar (Runtime, Account, Plugins) starts open. A group the admin folds stays folded on the next page and the next visit, as before, and the group of the open page is always open
 - The line under every admin page names the version too: "© 2026 · Powered by Mishka CMS v0.0.3", the version smaller and in a lighter grey, read from the host application (`MishkaCmsCore.Helpers.host_version/0`). An extension's credit shows the `version:` it gives, and none when it gives none
 
