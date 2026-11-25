@@ -153,7 +153,7 @@ defmodule MishkaCmsCore.MixProject do
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
-      mishka_dep(:mishka_installer, "~> 0.1.17"),
+      mishka_dep(:mishka_installer, "~> 0.1.18"),
       {:guarded_struct, "~> 0.1.11"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
@@ -167,7 +167,7 @@ defmodule MishkaCmsCore.MixProject do
       # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
       # is read.
       {:localize, "~> 1.4"},
-      mishka_dep(:mishka_gervaz, "~> 0.0.12"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.13"),
       # Names and slugs: `MishkaCmsCore.Runtime.Resources.Changes.InternalName` and
       # `MishkaCmsCore.Runtime.Languages.slug_locales/1`.
       mishka_dep(:mishka_slug, "~> 0.0.3"),

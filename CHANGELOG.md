@@ -15,6 +15,7 @@
 - The Activity log's search keeps the text as typed, tags included: `<b>bold</b>` is searched as written in the box, the URL and the read, where the tags were taken out and it searched for `bold`
 - A word that only a union source's sentence says ("published", "refunded") finds its rows. A source names its sentences in the optional `sentences/0`; the read hands its branch the actions whose words hold the search, and their rows are kept beside the ones the search matches in the columns. An action that is not a plain name never reaches the SQL
 - The starter site layout draws a warning flash in amber, apart from the success and info flashes in green
+- Needs mishka_gervaz 0.0.13 (form errors that name their field, the copy button that keeps its size, group descriptions) and mishka_installer 0.1.18 (an extension archive is checked before it is unpacked)
 - Dependencies are at their latest releases: ash 3.38.1, the first release with both of its security fixes (forged keysets and keyword input cast with storage casting), mishka_slug 0.0.3, igniter 0.8.6, image 0.74.0, color 1.0.0, localize 1.9.0, db_connection 2.10.3, eqrcode 0.3.0 and lazy_html 0.1.15; sweet_xml is no longer used. assent and bcrypt_elixir stay behind, held by ash_authentication
 
 # Changelog for MishkaCmsCore 0.0.6
