@@ -1047,7 +1047,7 @@ msgstr ""
 msgid "Clause %{index}: "
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:2333
+#: lib/mishka_cms_core/runtime/resources/component.ex:2341
 #, elixir-autogen, elixir-format
 msgid "Component name must be unique within a site."
 msgstr ""
@@ -1092,7 +1092,7 @@ msgstr ""
 msgid "Host must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1340
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1345
 #, elixir-autogen, elixir-format
 msgid "Invalid"
 msgstr ""
