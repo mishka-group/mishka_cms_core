@@ -52,6 +52,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed do
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
   alias MishkaCmsCore.Activity.Helpers
+  alias MishkaCmsCoreWeb.Templates.ActivityTimeline
   alias Phoenix.LiveView.AsyncResult
   alias Phoenix.LiveView.JS
 
@@ -433,7 +434,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed do
 
                 <span class={[
                   "rounded-[5px] px-[7px] py-0.5 text-[8.5px] font-bold uppercase tracking-[0.05em]",
-                  tone_class(entry.badge_tone)
+                  ActivityTimeline.badge_class(entry.badge_tone)
                 ]}>
                   {entry.badge_label}
                 </span>
@@ -587,16 +588,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed do
 
   defp severity_class(:error), do: "bg-[#fbe9e7] text-[#b3433a]"
   defp severity_class(_), do: "bg-[#fbf1df] text-[#a5691a]"
-
-  defp tone_class(:emerald), do: "bg-[#e6f6ee] text-[#177a53]"
-  defp tone_class(:sky), do: "bg-[#e6f1fa] text-[#276fa3]"
-  defp tone_class(:amber), do: "bg-[#fbf1df] text-[#a5691a]"
-  defp tone_class(:rose), do: "bg-[#fbe9e7] text-[#b3433a]"
-  defp tone_class(:indigo), do: "bg-[#eeedfb] text-[#4f4bcc]"
-  defp tone_class(:violet), do: "bg-[#eeedfb] text-[#4f4bcc]"
-  defp tone_class(:teal), do: "bg-[#e6f6ee] text-[#177a53]"
-  defp tone_class(:fuchsia), do: "bg-[#fbe8f0] text-[#a83f6d]"
-  defp tone_class(_), do: "bg-[#f2f1ec] text-[#6d6a63]"
 
   defp route_broadcast(socket, %Phoenix.Socket.Broadcast{} = msg) do
     scope = build_scope(socket.assigns.current_user, socket.assigns[:resources])

@@ -197,8 +197,9 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
     `Phoenix.LiveView.JS` and LiveView bindings: the arrow keys are window key bindings drawn only
     while the list is open, so a key pressed while it is closed sends nothing.
 
-    Below 640 px the box is a 44 px search icon (`<id>-phone`) that opens a sheet over the whole
-    screen (`<id>-sheet`) with its own input focused and the same groups listed under it, each row at
+    Below 640 px, and wherever the bar leaves the search less than 12rem (a container query on the
+    component: a tablet, a bar crowded by the extensions' items), the box is a 44 px search icon
+    (`<id>-phone`) that opens a sheet over the whole screen (`<id>-sheet`) with its own input focused and the same groups listed under it, each row at
     least 44 px tall; its back arrow and Escape close it. The sheet is drawn through a portal
     (`<id>-sheet-portal`) into `#admin-portals`, the shell's slot outside the top bar: the bar's
     `backdrop-filter` makes it the box of every `fixed` element inside it, which would cut the sheet
@@ -289,9 +290,9 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
       <div
         id={@id}
         phx-click-away={@open && JS.push("close", target: @myself)}
-        class="relative min-w-0 flex-1 max-w-[440px] max-[640px]:max-w-none max-[640px]:flex-none"
+        class="@container relative min-w-0 flex-1 max-w-[440px] max-[640px]:max-w-none max-[640px]:flex-none max-[640px]:[container-type:normal]"
       >
-        <div id={@id <> "-box"} class="relative max-[640px]:hidden!">
+        <div id={@id <> "-box"} class="relative max-[640px]:hidden! @max-[12rem]:hidden!">
           <.icon
             name="hero-magnifying-glass"
             class="absolute start-[13px] top-1/2 size-4 -translate-y-1/2 text-[#a8a5a0]"
@@ -316,7 +317,7 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
               aria-controls={@id <> "-results"}
               aria-activedescendant={@open && is_integer(@active) && row_id(@id, @active)}
               placeholder={@placeholder || gettext("Search pages, posts, people…")}
-              class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea] focus:shadow-[0_0_0_3px_rgba(109,105,230,.16)]"
+              class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] pointer-coarse:h-11 ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea] focus:shadow-[0_0_0_3px_rgba(109,105,230,.16)]"
             />
           </form>
 
@@ -336,7 +337,7 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
           aria-label={gettext("Search")}
           aria-controls={@id <> "-sheet"}
           phx-click={open_sheet(@id)}
-          class="hidden size-11 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[640px]:flex!"
+          class="hidden size-11 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[640px]:flex! @max-[12rem]:flex!"
         >
           <.icon name="hero-magnifying-glass" class="size-[18px]" />
         </button>

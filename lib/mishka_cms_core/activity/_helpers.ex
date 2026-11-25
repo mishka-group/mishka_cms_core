@@ -253,6 +253,19 @@ defmodule MishkaCmsCore.Activity.Helpers do
   end
 
   @doc """
+  `link` when it is a path of the same site, such as `"/admin/dashboard/shop/orders/1"`, else `nil`:
+  an entry's link is drawn as an anchor, so a full URL, a protocol-relative `//host` or a `/\\host`
+  a browser reads as another host never becomes one.
+  """
+  @spec local_path(term()) :: String.t() | nil
+  def local_path("//" <> _host), do: nil
+
+  def local_path("/" <> _path = link),
+    do: if(String.contains?(link, ["\\", "\n", "\r"]), do: nil, else: link)
+
+  def local_path(_link), do: nil
+
+  @doc """
   Heroicon name for an action atom, for the activity timeline's per-row icon.
   Covers both PaperTrail/AshEvents content actions and Oban job outcomes.
   """

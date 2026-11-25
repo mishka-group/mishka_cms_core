@@ -38,7 +38,9 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
   served; and a page's head shows it where nothing of the page's own takes its place.
 
   `:media_static_dir` points the files at the test's own folder; `async: false` — `AssetsState`,
-  the settings cache and that folder are process-global.
+  the settings cache and that folder are process-global. Each test's site has a name of its own and
+  leaves `SiteState` when it ends: the site cache is shared too, and a name another test left there
+  refuses this test's site.
   """
   use MishkaCmsCore.DataCase, async: false
 
@@ -62,13 +64,16 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
     Application.put_env(:mishka_cms_core, :media_static_dir, dir)
     snapshot = SettingsState.snapshot()
 
+    name = "cards#{System.unique_integer([:positive])}"
+    site = create_site!(name: name, host: "#{name}.test", active: true)
+
     on_exit(fn ->
       Application.delete_env(:mishka_cms_core, :media_static_dir)
       SettingsState.restore(snapshot)
+      SiteState.delete(site.id)
       File.rm_rf(dir)
     end)
 
-    site = create_site!(active: true)
     {:ok, _} = Settings.put("site.title", "Acme Studio", site_id: site.id)
 
     %{site: site, dir: dir}
@@ -538,7 +543,6 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
         master: site.master
       })
 
-    on_exit(fn -> SiteState.delete(site.id) end)
     site
   end
 

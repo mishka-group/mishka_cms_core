@@ -641,11 +641,18 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   def default(attr), do: opts(attr)["default"]
 
   @doc """
-  A human label for an attribute — `start_icon` becomes "Start icon". The kit ships no labels, only
-  names, so this is derived rather than looked up.
+  A human label for an attribute — `start_icon` becomes "Start icon". A kit that names its own
+  words for it says so in `opts.label` (`"label": "Checkout mode"`), which wins; otherwise the label
+  is derived from the name.
   """
   @spec label(String.t() | map()) :: String.t()
-  def label(attr) when is_map(attr), do: attr |> name() |> label()
+  def label(attr) when is_map(attr) do
+    case opts(attr)["label"] do
+      label when is_binary(label) and label != "" -> label
+      _derived -> attr |> name() |> label()
+    end
+  end
+
   def label(nil), do: ""
 
   def label(name) when is_binary(name) do
@@ -683,6 +690,75 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
       hint -> hinted(hint, attr, Map.get(features, name, values_of(opts)))
     end
   end
+
+  @doc """
+  The words a value of `attr` is shown with in its select or pills: the kit's own, from
+  `opts.labels` (`"labels": {"dark": "Dark", "plain": "Plain (no border)"}`), else the value itself.
+  """
+  @spec value_label(map(), term()) :: String.t()
+  def value_label(attr, value) do
+    case opts(attr)["labels"] do
+      %{} = labels -> labels |> Map.get(to_string(value)) |> shown_label(value)
+      _none -> to_string(value)
+    end
+  end
+
+  defp shown_label(label, _value) when is_binary(label) and label != "", do: label
+  defp shown_label(_missing, value), do: to_string(value)
+
+  @doc """
+  The source an attribute's choices are read from when they live outside the bundle, such as the
+  products of the site a block shows: `opts.choices`, a name an extension answers on
+  `MishkaCmsCore.Builder.Events.attr_choices/1`. `nil` for an attribute whose values the bundle
+  holds itself.
+  """
+  @spec choices_source(map()) :: String.t() | nil
+  def choices_source(attr) do
+    case opts(attr)["choices"] do
+      source when is_binary(source) and source != "" -> source
+      _none -> nil
+    end
+  end
+
+  @doc """
+  `attr` with the choices read for it (`[%{value:, label:}]`) as its values and their labels, drawn
+  as a select. A choice the source no longer offers is not added; the control keeps a value the
+  page already holds through its own "(default)" option and the box beside it.
+  """
+  @spec with_choices(map(), [%{value: String.t(), label: String.t()}]) :: map()
+  def with_choices(attr, choices) when is_list(choices) do
+    values = Enum.map(choices, & &1.value)
+    labels = Map.new(choices, &{&1.value, &1.label})
+
+    attr
+    |> stringify()
+    |> Map.put(
+      "opts",
+      Map.merge(opts(attr), %{
+        "editor" => "select",
+        "values" => values,
+        "labels" => labels,
+        "choices_read" => true
+      })
+    )
+  end
+
+  @doc """
+  Whether `attr` is for the editor's canvas only (`opts.canvas_only`), such as which visitor a block
+  is drawn for while it is edited: the canvas draws it and a save leaves it out of the page
+  (`MishkaCmsCore.Runtime.Authoring.Tree.saved/2`).
+  """
+  @spec canvas_only?(map()) :: boolean()
+  def canvas_only?(attr), do: opts(attr)["canvas_only"] == true
+
+  # The attributes a page hands a component itself, never an author: `current_user` is the visitor
+  # (`MishkaCmsCore.Runtime.Authoring.Tree.saved/2` writes it, and a content marker is handed it by
+  # `MishkaCmsCore.Runtime.ContentComponents`), so the Inspector does not offer it.
+  @handed ~w(current_user)
+
+  @doc "The attributes the page hands a component itself, which the Inspector does not offer."
+  @spec handed() :: [String.t()]
+  def handed, do: @handed
 
   # THE SAME QUESTION FOR AN ELEMENT NOBODY DECLARED. `widget/3` reads a kit's own attribute — its
   # type, its `values`, its `editor` hint. A `<img src="…">` dropped on the page has none of that:
@@ -733,7 +809,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   defp hinted("icon", _attr, _values), do: :icon
   defp hinted("media", _attr, _values), do: :media
   defp hinted("textarea", _attr, _values), do: :textarea
-  defp hinted("select", _attr, values), do: select_or_segmented(values)
+  # Read choices are a select whatever their number: they are names a site owner wrote, not a
+  # kit's short words.
+  defp hinted("select", attr, values) do
+    case opts(attr)["choices_read"] do
+      true -> {:select, values}
+      _bundle_values -> select_or_segmented(values, attr)
+    end
+  end
 
   # A NUMBER THE KIT DECLARES RATHER THAN ONE WE RECOGNISE. Inference only reaches `number/1` when
   # the attribute's TYPE is numeric, which leaves a kit that models a count or a delay as a string —
@@ -779,7 +862,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
       # that cannot be wrong here is the one that knows it is holding a collection.
       collection?(attr) -> {:collection, collection_kind(attr)}
       columns?(name, values) -> {:columns, values}
-      is_list(values) and values != [] -> select_or_segmented(values)
+      is_list(values) and values != [] -> select_or_segmented(values, attr)
       value_type(attr) in @numbers -> number(opts)
       true -> infer_from_name(attr, name, component)
     end
@@ -855,10 +938,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
 
   # A handful of short options reads better as a segmented control than as a dropdown — the
   # prototype's rule, and the reason `variant` gets pills while `color` (20+ values) gets a select.
-  defp select_or_segmented(values) do
+  # Measured by what the control shows: a value the kit gives words to is as long as its words.
+  defp select_or_segmented(values, attr) do
     short? =
       length(values) <= @segmented_limit and
-        Enum.all?(values, &(String.length(to_string(&1)) <= @segmented_value_length))
+        Enum.all?(values, &(String.length(value_label(attr, &1)) <= @segmented_value_length))
 
     case short? do
       true -> {:segmented, values}
@@ -963,15 +1047,40 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   @doc """
   Groups a component's attributes into the panel's sections. Anything that matches no group heading
   lands in "Properties", and `global` attributes are pulled out entirely — they are the collapsed
-  "HTML attributes" editor, not a property.
+  "HTML attributes" editor, not a property. So are the attributes the page hands the component
+  itself (`handed/0`).
+
+  A kit that names the section of an attribute in `opts.group` (`"group": "Checkout"`) is followed:
+  its sections come first, in the order the kit first names them, each holding its attributes in the
+  order the kit declares them. The attributes it names no section for are grouped as above.
   """
   @spec grouped(map()) :: [{String.t(), [map()]}]
   def grouped(component) do
-    (attrs(component) ++ rest_attrs(component))
-    |> Enum.reject(&(type(&1) == "global"))
-    |> Enum.group_by(&group_of/1)
-    |> Enum.sort_by(fn {group, _attrs} -> group_order(group) end)
-    |> Enum.map(fn {group, attrs} -> {group, Enum.sort_by(attrs, &rank/1)} end)
+    {named, inferred} =
+      (attrs(component) ++ rest_attrs(component))
+      |> Enum.reject(&(type(&1) == "global" or name(&1) in @handed))
+      |> Enum.split_with(&declared_group/1)
+
+    declared =
+      named
+      |> Enum.map(&declared_group/1)
+      |> Enum.uniq()
+      |> Enum.map(fn group -> {group, Enum.filter(named, &(declared_group(&1) == group))} end)
+
+    inferred =
+      inferred
+      |> Enum.group_by(&group_of/1)
+      |> Enum.sort_by(fn {group, _attrs} -> group_order(group) end)
+      |> Enum.map(fn {group, attrs} -> {group, Enum.sort_by(attrs, &rank/1)} end)
+
+    declared ++ inferred
+  end
+
+  defp declared_group(attr) do
+    case opts(attr)["group"] do
+      group when is_binary(group) and group != "" -> group
+      _none -> nil
+    end
   end
 
   defp group_of(attr) do

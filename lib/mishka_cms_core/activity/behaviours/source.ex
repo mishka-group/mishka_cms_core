@@ -30,7 +30,9 @@ defmodule MishkaCmsCore.Activity.Behaviours.Source do
   template a map `entry.that_key` raises on — `MishkaCmsCore.Activity.Helpers.complete_entry/1` fills
   the gap at both seams, and `entry_contract_test.exs` fails the source that left it. The optional
   tail is the pipeline's own: `:actor_label` and `:site_label` are resolved downstream by
-  `MishkaCmsCore.Activity.ActivityEntry`, `:host` by the dashboard's Recent activity widget.
+  `MishkaCmsCore.Activity.ActivityEntry`, `:host` by the dashboard's Recent activity widget. A source
+  may also set `:link`, a path of the same site its record's page is at, which the log draws the
+  message as a link to (`MishkaCmsCore.Activity.Helpers.local_path/1` keeps only a local path).
   """
   @type entry :: %{
           required(:id) => String.t(),
@@ -45,6 +47,7 @@ defmodule MishkaCmsCore.Activity.Behaviours.Source do
           required(:site_id) => String.t() | nil,
           required(:user_id) => String.t() | nil,
           required(:message) => String.t(),
+          optional(:link) => String.t() | nil,
           optional(atom()) => any()
         }
 

@@ -176,12 +176,12 @@ msgstr ""
 msgid "Active & Compile"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:93
+#: lib/mishka_cms_core/activity/activity_entry.ex:103
 #, elixir-autogen, elixir-format
 msgid "Activity"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:141
+#: lib/mishka_cms_core/activity/activity_entry.ex:172
 #, elixir-autogen, elixir-format
 msgid "Actor"
 msgstr ""
@@ -342,7 +342,7 @@ msgstr ""
 msgid "Confirmed"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:231
+#: lib/mishka_cms_core/activity/activity_entry.ex:262
 #: lib/mishka_cms_core/runtime/resources/layout.ex:743
 #: lib/mishka_cms_core/runtime/resources/page.ex:998
 #, elixir-autogen, elixir-format
@@ -383,7 +383,7 @@ msgstr ""
 msgid "Custom"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:172
+#: lib/mishka_cms_core/activity/activity_entry.ex:203
 #, elixir-autogen, elixir-format
 msgid "Date"
 msgstr ""
@@ -896,7 +896,7 @@ msgstr ""
 msgid "Remove"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:248
+#: lib/mishka_cms_core/activity/activity_entry.ex:279
 #, elixir-autogen, elixir-format
 msgid "Resource"
 msgstr ""
@@ -948,7 +948,7 @@ msgstr ""
 msgid "Schema (JSON)"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:257
+#: lib/mishka_cms_core/activity/activity_entry.ex:288
 #: lib/mishka_cms_core/runtime/resources/head_code.ex:205
 #: lib/mishka_cms_core/runtime/resources/layout.ex:372
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:126
@@ -998,14 +998,14 @@ msgstr ""
 msgid "Select site..."
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:222
+#: lib/mishka_cms_core/activity/activity_entry.ex:253
 #: lib/mishka_cms_core/notify/notification.ex:183
 #, elixir-autogen, elixir-format
 msgid "Severity"
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/user.ex:328
-#: lib/mishka_cms_core/activity/activity_entry.ex:193
+#: lib/mishka_cms_core/activity/activity_entry.ex:224
 #: lib/mishka_cms_core/mail/delivery.ex:124
 #: lib/mishka_cms_core/runtime/resources/component.ex:455
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:494
@@ -1046,7 +1046,7 @@ msgstr ""
 msgid "Slots"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:238
+#: lib/mishka_cms_core/activity/activity_entry.ex:269
 #, elixir-autogen, elixir-format
 msgid "Source"
 msgstr ""
@@ -1377,18 +1377,18 @@ msgstr ""
 msgid "Add translation"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:247
+#: lib/mishka_cms_core/activity/activity_entry.ex:278
 #, elixir-autogen, elixir-format
 msgid "All resources"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:221
+#: lib/mishka_cms_core/activity/activity_entry.ex:252
 #: lib/mishka_cms_core/notify/notification.ex:182
 #, elixir-autogen, elixir-format
 msgid "All severities"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:237
+#: lib/mishka_cms_core/activity/activity_entry.ex:268
 #, elixir-autogen, elixir-format
 msgid "All sources"
 msgstr ""
@@ -1483,7 +1483,7 @@ msgstr ""
 msgid "Are you sure you want to delete this user? This action cannot be undone."
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:232
+#: lib/mishka_cms_core/activity/activity_entry.ex:263
 #, elixir-autogen, elixir-format
 msgid "Background"
 msgstr ""
@@ -1626,7 +1626,7 @@ msgstr ""
 msgid "Drafts"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:215
+#: lib/mishka_cms_core/activity/activity_entry.ex:246
 #: lib/mishka_cms_core/notify/notification.ex:177
 #, elixir-autogen, elixir-format
 msgid "Error"
@@ -1661,8 +1661,8 @@ msgid "General"
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/user.ex:343
-#: lib/mishka_cms_core/activity/activity_entry.ex:660
-#: lib/mishka_cms_core/activity/activity_entry.ex:663
+#: lib/mishka_cms_core/activity/activity_entry.ex:705
+#: lib/mishka_cms_core/activity/activity_entry.ex:708
 #, elixir-autogen, elixir-format
 msgid "Global"
 msgstr ""
@@ -1702,7 +1702,7 @@ msgstr ""
 msgid "Inactive"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:213
+#: lib/mishka_cms_core/activity/activity_entry.ex:244
 #: lib/mishka_cms_core/notify/notification.ex:174
 #, elixir-autogen, elixir-format
 msgid "Info"
@@ -1734,7 +1734,7 @@ msgstr ""
 msgid "Live"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:307
+#: lib/mishka_cms_core/activity/activity_entry.ex:342
 #, elixir-autogen, elixir-format
 msgid "Load more events"
 msgstr ""
@@ -1797,7 +1797,7 @@ msgstr ""
 msgid "No layouts found"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:324
+#: lib/mishka_cms_core/activity/activity_entry.ex:359
 #, elixir-autogen, elixir-format
 msgid "No matching events"
 msgstr ""
@@ -2123,7 +2123,7 @@ msgstr ""
 msgid "Restored as inactive — activate it to go live."
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:256
+#: lib/mishka_cms_core/activity/activity_entry.ex:287
 #, elixir-autogen, elixir-format
 msgid "Search events…"
 msgstr ""
@@ -2199,7 +2199,7 @@ msgstr ""
 msgid "Video"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:214
+#: lib/mishka_cms_core/activity/activity_entry.ex:245
 #: lib/mishka_cms_core/notify/notification.ex:176
 #, elixir-autogen, elixir-format
 msgid "Warning"
@@ -5696,7 +5696,7 @@ msgstr ""
 msgid "Authors"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:288
+#: lib/mishka_cms_core/activity/activity_entry.ex:319
 #, elixir-autogen, elixir-format
 msgid "Bring back"
 msgstr ""
@@ -5820,7 +5820,7 @@ msgstr ""
 msgid "Export file"
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:116
+#: lib/mishka_cms_core/activity/activity_entry.ex:147
 #, elixir-autogen, elixir-format
 msgid "Failed"
 msgstr ""
@@ -6289,8 +6289,8 @@ msgstr ""
 msgid "Search titles..."
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:123
-#: lib/mishka_cms_core/activity/activity_entry.ex:216
+#: lib/mishka_cms_core/activity/activity_entry.ex:154
+#: lib/mishka_cms_core/activity/activity_entry.ex:247
 #, elixir-autogen, elixir-format
 msgid "Skipped"
 msgstr ""
@@ -7441,7 +7441,7 @@ msgstr ""
 msgid "When the post is published, in UTC."
 msgstr ""
 
-#: lib/mishka_cms_core/activity/activity_entry.ex:272
+#: lib/mishka_cms_core/activity/activity_entry.ex:303
 #, elixir-autogen, elixir-format
 msgid "Skip"
 msgstr ""

@@ -2169,6 +2169,14 @@ defmodule MishkaCmsCore.Runtime.Component do
       description "The palette glyph this component names for itself, if any"
     end
 
+    # THE NAME THE PALETTE SHOWS, when the kit gives one in `extra.label` ("Product card"); a kit
+    # that gives none is named from its component name. Same reason as `icon_name` for it being a
+    # calculation.
+    calculate :label, :string, expr(fragment("?->>'label'", extra)) do
+      public? true
+      description "The name the kit gives this component in the palette, if any"
+    end
+
     # WHERE THE KIT DOCUMENTS THIS COMPONENT. All 136 Chelekom components ship one and nothing read
     # it, so an author stuck on what `variant` means had the answer in the database and no way to
     # reach it. Same reason as `icon_name` for it being a calculation: one short string out of a

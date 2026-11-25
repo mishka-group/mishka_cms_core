@@ -1499,7 +1499,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
           class={[
             "cursor-pointer rounded-[10px] border bg-surface px-4 py-3 text-[13px] font-medium dark:bg-surface-dark",
             kind == "error" && "border-bad text-bad",
-            kind != "error" && "border-ok text-ok"
+            kind == "warning" && "border-warn text-warn",
+            kind not in ["error", "warning"] && "border-ok text-ok"
           ]}
         >
           {message}

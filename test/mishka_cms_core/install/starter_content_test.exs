@@ -428,6 +428,11 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       assert before_bar =~ ~s(component_name="site-header")
       assert after_bar =~ ~s(id="site-flash")
       assert after_bar =~ @column
+
+      # Each kind of flash has its own colour: an error red, a warning amber, the rest green.
+      assert after_bar =~ ~s(kind == "error" && "border-bad text-bad")
+      assert after_bar =~ ~s(kind == "warning" && "border-warn text-warn")
+      assert after_bar =~ ~s(kind not in ["error", "warning"] && "border-ok text-ok")
     end
   end
 

@@ -107,7 +107,7 @@ defmodule MishkaCmsCore.Activity.Query do
     cap = min(offset + limit, @max_cap)
 
     site_id
-    |> branches(kind, severity, shown, UnionSource.all())
+    |> branches(kind, severity, shown, UnionSource.all(), Map.get(opts, :search))
     |> run(site_id, cap, limit, offset, resource, search)
   end
 
@@ -143,7 +143,7 @@ defmodule MishkaCmsCore.Activity.Query do
     |> Map.new(fn {key, severity} ->
       {key,
        site_id
-       |> branches(kind, severity, shown, sources)
+       |> branches(kind, severity, shown, sources, Map.get(opts, :search))
        |> count(site_id, resource, search)}
     end)
   end
@@ -160,7 +160,13 @@ defmodule MishkaCmsCore.Activity.Query do
     site_id = Map.get(opts, :site_id)
 
     site_id
-    |> branches(Map.get(opts, :kind), Map.get(opts, :severity), shown(opts), UnionSource.all())
+    |> branches(
+      Map.get(opts, :kind),
+      Map.get(opts, :severity),
+      shown(opts),
+      UnionSource.all(),
+      Map.get(opts, :search)
+    )
     |> count(site_id, blank(Map.get(opts, :resource)), like(Map.get(opts, :search)))
   end
 
@@ -180,7 +186,13 @@ defmodule MishkaCmsCore.Activity.Query do
     search = like(Map.get(opts, :search))
 
     site_id
-    |> branches(kind, Map.get(opts, :severity), shown(opts), UnionSource.all())
+    |> branches(
+      kind,
+      Map.get(opts, :severity),
+      shown(opts),
+      UnionSource.all(),
+      Map.get(opts, :search)
+    )
     |> per_day(site_id, resource, search)
   end
 
@@ -292,12 +304,12 @@ defmodule MishkaCmsCore.Activity.Query do
   #
   # A Skipped read is the core's jobs alone: no content row is skipped, and a union source is not
   # asked, because its branch knows only the severities `UnionSource` names.
-  defp branches(site_id, kind, severity, shown, union_sources) do
+  defp branches(site_id, kind, severity, shown, union_sources, search) do
     content? = kind in [nil, "content"] and severity != "skipped"
 
     union =
       if content?,
-        do: union_branches(union_sources, site_id, severity, shown),
+        do: union_branches(union_sources, site_id, severity, shown, search),
         else: %{sql: [], params: [], sources: %{}}
 
     sql =
@@ -318,7 +330,7 @@ defmodule MishkaCmsCore.Activity.Query do
 
   # EACH SOURCE IS ASKED FOR ITS BRANCH ON ITS OWN, so one that raises or answers something else is
   # left out of this read alone, and the log keeps every other source.
-  defp union_branches(sources, site_id, severity, shown) do
+  defp union_branches(sources, site_id, severity, shown, search) do
     first = if site_id, do: 7, else: 6
 
     Enum.reduce(sources, %{sql: [], params: [], sources: %{}}, fn source, union ->
@@ -329,7 +341,7 @@ defmodule MishkaCmsCore.Activity.Query do
         first_param: first + length(union.params)
       }
 
-      case union_branch(source, read) do
+      case union_branch(source, read, search) do
         {:ok, {sql, params}} ->
           %{
             sql: union.sql ++ [sql],
@@ -351,12 +363,14 @@ defmodule MishkaCmsCore.Activity.Query do
     end)
   end
 
-  defp union_branch(source, read) do
+  defp union_branch(source, read, search) do
     id = source.id()
 
     if id in @core_sources or not valid_ident?(id) do
       {:error, {:source_id_not_allowed, id}}
     else
+      read = Map.put(read, :search_actions, UnionSource.search_actions(source, search))
+
       case source.union_branch(read) do
         {sql, params} = branch when is_binary(sql) and is_list(params) -> {:ok, branch}
         nil -> :none
@@ -619,6 +633,26 @@ defmodule MishkaCmsCore.Activity.Query do
     " AND ($5::text IS NULL OR #{ors})"
   end
 
+  @doc """
+  `search_clause/1` that also keeps the rows whose action is one of `actions`: the read's
+  `search_actions`, the actions whose sentence holds the words searched for
+  (`MishkaCmsCore.Activity.Behaviours.UnionSource.search_actions/2`). `action_expr` is the SQL of the
+  row's action. An action is written into the SQL only when it is a plain name (letters, digits and
+  `_`), like a table name; the search itself stays the `$5` parameter.
+  """
+  @spec search_clause([String.t()], String.t(), [String.t()]) :: String.t()
+  def search_clause(exprs, action_expr, actions) do
+    case Enum.filter(actions, &valid_ident?/1) do
+      [] ->
+        search_clause(exprs)
+
+      named ->
+        listed = Enum.map_join(named, ", ", &"'#{&1}'")
+        ors = Enum.map_join(exprs, " OR ", &"#{&1} ILIKE $5::text")
+        " AND ($5::text IS NULL OR #{ors} OR #{action_expr} IN (#{listed}))"
+    end
+  end
+
   defp blank(value) when value in [nil, "", "all"], do: nil
   defp blank(value), do: to_string(value)
 
@@ -633,8 +667,9 @@ defmodule MishkaCmsCore.Activity.Query do
   Grouped options for the resource/source `:select` filter — one `{extension_label,
   [{resource_label, module_string}]}` group per extension (so same-named resources
   in different extensions, e.g. Blog vs Document "Tag", stay distinct).
-  Covers version parent modules + distinct event-log `resource` values; the value
-  is the module string the SQL filters on.
+  Covers version parent modules, distinct event-log `resource` values and the resources each
+  union source files its rows under (`MishkaCmsCore.Activity.Behaviours.UnionSource.resources/1`,
+  with the label the source gives); the value is the module string the SQL filters on.
   """
   def resource_options do
     versions = Enum.map(Discovery.paper_trailed(), &to_string/1)
@@ -645,11 +680,23 @@ defmodule MishkaCmsCore.Activity.Query do
       |> Enum.filter(&valid_ident?/1)
       |> Enum.flat_map(&distinct_event_resources/1)
 
-    (versions ++ events ++ Enum.map(@draft_tables, & &1.module))
+    union =
+      UnionSource.resources()
+      |> Enum.filter(&valid_module?(elem(&1, 1)))
+      |> Map.new(fn {label, module} -> {module, label} end)
+
+    (versions ++ events ++ Enum.map(@draft_tables, & &1.module) ++ Map.keys(union))
     |> Enum.uniq()
-    |> Enum.group_by(&group_label_of/1, &{resource_label_of(&1), &1})
+    |> Enum.group_by(&group_label_of/1, &{option_label(&1, union), &1})
     |> Enum.map(fn {group, opts} -> {group, Enum.sort_by(opts, &elem(&1, 0))} end)
     |> Enum.sort_by(&elem(&1, 0))
+  end
+
+  defp option_label(module, union) do
+    case Map.fetch(union, module) do
+      {:ok, label} -> Helpers.translate(label)
+      :error -> resource_label_of(module)
+    end
   end
 
   defp group_label_of(resource_string) do

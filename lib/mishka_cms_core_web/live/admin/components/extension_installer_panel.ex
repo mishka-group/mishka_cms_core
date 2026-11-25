@@ -53,12 +53,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   use Phoenix.Component
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  import MishkaCmsCore.CoreComponents, only: [icon: 1, modal: 1, select_chevron: 1, show_modal: 1]
+  import MishkaCmsCore.CoreComponents,
+    only: [icon: 1, modal: 1, select_chevron: 1, show_modal: 2]
+
   import Phoenix.LiveView, only: [put_flash: 3]
 
   alias MishkaCmsCore.Install.Extensions
   alias MishkaCmsCore.Runtime.{PageProvision, ShareCard}
-  alias MishkaCmsCoreWeb.Live.Admin.Components.{KitUpgradePanel, ShareCardRedraw}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{DoctorChecks, KitUpgradePanel, ShareCardRedraw}
+  alias Phoenix.LiveView.JS
 
   require Logger
 
@@ -589,7 +592,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
       :if={@allowed? and Extensions.installed?(@setup.site_id || "", @setup.app)}
       id={"#{@id}-open"}
       type="button"
-      phx-click={show_modal("#{@id}-doctor")}
+      phx-click={show_doctor(@id)}
       title={gettext("Check and repair the %{noun} on this site", noun: @setup.noun)}
       aria-label={gettext("Check and repair the %{noun} on this site", noun: @setup.noun)}
       class="flex size-10 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] transition-colors hover:bg-[#f7f6f3]"
@@ -597,6 +600,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
       <.icon name="hero-wrench-screwdriver" class="size-[15px]" />
     </button>
     """
+  end
+
+  @doc """
+  Opens the `doctor_modal/1` whose `id` is given and runs its extension's checks
+  (`MishkaCmsCoreWeb.Live.Admin.Components.DoctorChecks`), so nothing is asked while it is closed.
+  What `doctor_button/1` does; a page that opens the modal from a menu of its own uses it too.
+  """
+  @spec show_doctor(JS.t(), String.t()) :: JS.t()
+  def show_doctor(js \\ %JS{}, id) when is_binary(id) do
+    js
+    |> show_modal("#{id}-doctor")
+    |> JS.push("run", target: "##{id}-checks")
   end
 
   @doc """
@@ -615,6 +630,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   When the extension answers `MishkaCmsCore.Runtime.ShareCard.targets_event/0` under its app's
   name, the modal ends with a button that draws its own share cards on that site again
   (`MishkaCmsCoreWeb.Live.Admin.Components.ShareCardRedraw`).
+
+  Given the `actor` (the page's `current_user`), it also lists the checks extensions add on
+  `"doctor:checks"` (`MishkaCmsCore.Install.DoctorChecks`), each under its extension's name, with a
+  button for each repair; they run when the modal is opened with `show_doctor/2`.
   """
   attr :id, :string, required: true
   attr :install_id, :string, required: true
@@ -624,6 +643,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   attr :site_name, :string, default: nil
   attr :allowed?, :boolean, default: false
   attr :title, :string, required: true
+  attr :actor, :map, default: nil
 
   def doctor_modal(assigns) do
     ~H"""
@@ -690,6 +710,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
               its own picker and its own Repair button off the top and bottom with it. --%>
         <div class="max-h-[42vh] overflow-y-auto">
           <KitUpgradePanel.standings setup={@kit} id={@id} />
+        </div>
+
+        <div class="max-h-[42vh] overflow-y-auto">
+          <.live_component
+            module={DoctorChecks}
+            id={"#{@id}-checks"}
+            app={@setup.app}
+            site_id={@kit.site_id || @setup.site_id}
+            actor={@actor}
+          />
         </div>
 
         <div class="mt-[18px] border-t border-[#ecebe6] pt-[16px]">

@@ -601,6 +601,46 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
     end
   end
 
+  describe "saved/2 — the tree a save writes into the page" do
+    @palette [
+      %{
+        name: "acme-library",
+        attrs: [
+          %{"name" => "heading", "type" => "string", "opts" => %{}},
+          %{"name" => "viewer", "type" => "string", "opts" => %{"canvas_only" => true}},
+          %{"name" => "current_user", "type" => "any", "opts" => %{"default" => nil}}
+        ]
+      },
+      %{name: "acme-card", attrs: [%{"name" => "title", "type" => "string", "opts" => %{}}]}
+    ]
+
+    defp saved(heex), do: heex |> Tree.parse!() |> Tree.saved(@palette) |> Serializer.serialize()
+
+    test "a component that declares the visitor is handed the page's, and loses its canvas-only attribute" do
+      out =
+        saved(~s(<.component component_name="acme-library" heading="Yours" viewer="owner" />))
+
+      assert out =~ ~s(current_user={assigns[:current_user]})
+      assert out =~ ~s(heading="Yours")
+      refute out =~ "viewer"
+    end
+
+    test "a visitor the author wrote is kept as written" do
+      out = saved(~s(<.component component_name="acme-library" current_user={@buyer} />))
+
+      assert out =~ ~s(current_user={@buyer})
+      refute out =~ "assigns[:current_user]"
+    end
+
+    test "a component that does not declare it, or one the palette does not know, is left alone" do
+      card = ~s(<.component component_name="acme-card" title="Hi" viewer="owner" />)
+      unknown = ~s(<.component component_name="acme-unknown" viewer="owner" />)
+
+      assert saved(card) == round_trip(card)
+      assert saved(unknown) == round_trip(unknown)
+    end
+  end
+
   describe "structure" do
     setup do
       %{tree: Tree.parse!(~s(<section><h1>T</h1><div><p>body</p></div></section>))}

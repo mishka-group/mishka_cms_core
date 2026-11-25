@@ -1047,7 +1047,7 @@ msgstr ""
 msgid "Clause %{index}: "
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:2333
+#: lib/mishka_cms_core/runtime/resources/component.ex:2341
 #, elixir-autogen, elixir-format
 msgid "Component name must be unique within a site."
 msgstr ""
@@ -1092,7 +1092,7 @@ msgstr ""
 msgid "Host must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1340
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1345
 #, elixir-autogen, elixir-format
 msgid "Invalid"
 msgstr ""
@@ -1508,7 +1508,7 @@ msgstr ""
 msgid "must be a JSON object"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:47
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:120
 #: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/range.ex:31
 #, elixir-autogen, elixir-format
 msgid "must be a number"
@@ -1524,8 +1524,8 @@ msgstr ""
 msgid "must be a valid date and time"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:30
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:43
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:41
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:119
 #, elixir-autogen, elixir-format
 msgid "must be a whole number"
 msgstr ""
@@ -1535,7 +1535,7 @@ msgstr ""
 msgid "must be valid JSON"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/templates/standard.ex:2093
+#: ../mishka_gervaz/lib/mishka_gervaz/form/templates/standard.ex:2496
 #, elixir-autogen, elixir-format
 msgid "is required"
 msgstr ""
@@ -2769,16 +2769,6 @@ msgstr ""
 msgid "is too late"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:66
-#, elixir-autogen, elixir-format
-msgid "is too large"
-msgstr ""
-
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:65
-#, elixir-autogen, elixir-format
-msgid "is too small"
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/__validations/error_status_once.ex:67
 #, elixir-autogen, elixir-format
 msgid "Entry %{number} is a second %{status} page. Keep one entry for each status."
@@ -2792,4 +2782,24 @@ msgstr ""
 #: lib/mishka_cms_core/skip/__changes/bring_back.ex:59
 #, elixir-autogen, elixir-format
 msgid "Only a skipped item can be brought back."
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/text.ex:84
+#, elixir-autogen, elixir-format
+msgid "must be %{count} characters or fewer"
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:85
+#, elixir-autogen, elixir-format
+msgid "must be %{max} or less"
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:82
+#, elixir-autogen, elixir-format
+msgid "must be %{min} or more"
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/text.ex:62
+#, elixir-autogen, elixir-format
+msgid "must be plain text, without HTML tags"
 msgstr ""

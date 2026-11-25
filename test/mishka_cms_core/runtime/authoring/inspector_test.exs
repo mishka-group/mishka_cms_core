@@ -586,6 +586,84 @@ defmodule MishkaCmsCore.Runtime.Authoring.InspectorTest do
       assert grouped["Appearance"] == ["color"]
       assert grouped["Properties"] == ["colorway"]
     end
+
+    test "the visitor the page hands a component is never offered" do
+      comp = component([attr("current_user", "any"), attr("title")])
+
+      names =
+        Inspector.grouped(comp)
+        |> Enum.flat_map(fn {_group, attrs} -> Enum.map(attrs, &Inspector.name/1) end)
+
+      assert names == ["title"]
+    end
+
+    test "a kit that names its sections is followed: its sections first, in its own order" do
+      comp =
+        component([
+          attr("look", "string", %{"group" => "Style"}),
+          attr("product", "any", %{"group" => "Product"}),
+          attr("title"),
+          attr("checkout", "string", %{"group" => "Checkout"}),
+          attr("button_text", "string", %{"group" => "Style"})
+        ])
+
+      grouped =
+        Enum.map(Inspector.grouped(comp), fn {g, a} -> {g, Enum.map(a, &Inspector.name/1)} end)
+
+      assert grouped == [
+               {"Style", ["look", "button_text"]},
+               {"Product", ["product"]},
+               {"Checkout", ["checkout"]},
+               {"Content", ["title"]}
+             ]
+    end
+  end
+
+  describe "the words a kit gives its attributes" do
+    test "a kit's label names the attribute, else the name does" do
+      assert Inspector.label(attr("checkout", "string", %{"label" => "Checkout mode"})) ==
+               "Checkout mode"
+
+      assert Inspector.label(attr("start_icon")) == "Start icon"
+    end
+
+    test "a value is shown by the kit's words for it, else by itself" do
+      look =
+        attr("look", "string", %{"values" => ~w(light dark), "labels" => %{"dark" => "Dark"}})
+
+      assert Inspector.value_label(look, "dark") == "Dark"
+      assert Inspector.value_label(look, "light") == "light"
+    end
+
+    test "values with long words are a select, not pills" do
+      short = attr("look", "string", %{"values" => ~w(light dark plain)})
+
+      long =
+        attr("look", "string", %{
+          "values" => ~w(light dark plain),
+          "labels" => %{"light" => "Light (follows the site theme)"}
+        })
+
+      assert {:segmented, _values} = Inspector.widget(short)
+      assert {:select, ~w(light dark plain)} = Inspector.widget(long)
+    end
+
+    test "choices read for a source are a select of their labels, however few" do
+      product = attr("product", "any", %{"editor" => "select", "choices" => "acme:products"})
+
+      assert Inspector.choices_source(product) == "acme:products"
+      assert Inspector.choices_source(attr("title")) == nil
+
+      chosen = Inspector.with_choices(product, [%{value: "kit", label: "UI kit"}])
+
+      assert Inspector.widget(chosen) == {:select, ["kit"]}
+      assert Inspector.value_label(chosen, "kit") == "UI kit"
+    end
+
+    test "an attribute for the canvas only says so" do
+      assert Inspector.canvas_only?(attr("viewer", "string", %{"canvas_only" => true}))
+      refute Inspector.canvas_only?(attr("look"))
+    end
   end
 
   describe "the two form sections" do
