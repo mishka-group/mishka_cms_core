@@ -5,15 +5,18 @@
 defmodule MishkaCmsCoreWeb.Live.ActivityUnionLiveTest do
   @moduledoc """
   The Activity page with a union source (`MishkaCmsCore.Activity.Behaviours.UnionSource`): a row
-  draws its source's badge.
+  draws its source's badge, a row the source announces with `changed/1` arrives without a reload
+  (once for a burst, and only on the logs that may show its site).
   """
   use MishkaCmsCore.ConnCase, async: false
 
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsCore.Activity.Behaviours.UnionSource
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.Plugins.ActivityUnionLive
+  alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index
   alias MishkaInstaller.Event.{Event, EventHandler}
 
   @path "/admin/dashboard/runtime/activity"
@@ -56,6 +59,67 @@ defmodule MishkaCmsCoreWeb.Live.ActivityUnionLiveTest do
     end
   end
 
+  describe "a union source's new rows" do
+    test "arrive on the open log once the source says so, without a reload", %{
+      conn: conn,
+      master: master
+    } do
+      view = open(conn, master, @path)
+      refute render(view) =~ "Order MS-9 paid"
+
+      ActivityUnionLive.write("Order MS-9 paid")
+      settle(view)
+      refute render(view) =~ "Order MS-9 paid"
+
+      UnionSource.changed(nil)
+      settle(view)
+
+      assert render(view) =~ "Order MS-9 paid"
+    end
+
+    test "a burst of them is one read, and the next change another", %{master: master} do
+      socket = mounted(master)
+
+      socket =
+        Enum.reduce(1..3, socket, fn _change, acc ->
+          {:noreply, next} = Index.handle_info({:activity_changed, nil}, acc)
+          next
+        end)
+
+      assert_received :reread_activity
+      refute_received :reread_activity
+
+      {:noreply, read} = Index.handle_info(:reread_activity, socket)
+      {:noreply, _next} = Index.handle_info({:activity_changed, nil}, read)
+
+      assert_received :reread_activity
+    end
+
+    test "reach the logs that may show their site, and no other", %{site: site, master: master} do
+      other = create_site!(name: "Shop", host: "shop.test", active: true)
+      site_admin = create_user_with_permissions!(["admin:dashboard:*"], site_id: site.id)
+
+      :ok = UnionSource.subscribe(site_admin)
+      UnionSource.changed(other.id)
+      refute_received {:activity_changed, _site}
+
+      UnionSource.changed(site.id)
+      site_id = site.id
+      assert_received {:activity_changed, ^site_id}
+      refute_received {:activity_changed, _site}
+
+      task =
+        Task.async(fn ->
+          :ok = UnionSource.subscribe(master)
+          UnionSource.changed(other.id)
+          UnionSource.changed(nil)
+          collect([])
+        end)
+
+      assert Task.await(task) == [other.id, nil]
+    end
+  end
+
   defp save_site!(site) do
     SiteState.save(%{
       id: site.id,
@@ -67,6 +131,24 @@ defmodule MishkaCmsCoreWeb.Live.ActivityUnionLiveTest do
     })
 
     site
+  end
+
+  defp collect(heard) do
+    receive do
+      {:activity_changed, site_id} -> collect([site_id | heard])
+    after
+      0 -> Enum.reverse(heard)
+    end
+  end
+
+  defp mounted(user) do
+    socket = %Phoenix.LiveView.Socket{
+      assigns: %{__changed__: %{}, flash: %{}, current_user: user},
+      private: %{live_temp: %{}, lifecycle: %Phoenix.LiveView.Lifecycle{}}
+    }
+
+    {:ok, socket} = Index.mount(%{}, %{}, socket)
+    socket
   end
 
   defp open(conn, user, path) do
@@ -81,5 +163,13 @@ defmodule MishkaCmsCoreWeb.Live.ActivityUnionLiveTest do
 
     render_async(view)
     view
+  end
+
+  # A change reaches the page as a message, the page asks itself for one read, and the table loads
+  # it and the counts off the render path: a round trip for each, then the loads.
+  defp settle(view) do
+    render(view)
+    render(view)
+    render_async(view)
   end
 end

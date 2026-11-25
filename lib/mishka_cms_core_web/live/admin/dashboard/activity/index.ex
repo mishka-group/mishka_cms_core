@@ -19,10 +19,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
   (`MishkaGervaz.Toast`, answered in `handle_info({:toast_undo, ...})`). A skipped job's Bring back
   (`:bring_back_job`) brings it back at once. Every open log of the job's site, this one included,
   hears the change on `MishkaCmsCore.Skip.topic/0` and reads its rows and counts again.
+
+  ## A union source's new rows
+
+  The core's records reach the page as they change. A union source's table is the extension's own,
+  so it says when it wrote rows (`MishkaCmsCore.Activity.Behaviours.UnionSource.changed/1`), and
+  the page reads its first page and counts again. The changes that wait in the page's mailbox
+  together are one read: the first asks for it with a message to itself, which the page answers after
+  the ones already waiting, and those ask for nothing more.
   """
   use MishkaCmsCore.ExtensionLiveView
 
   alias MishkaCmsCore.Activity.{ActivityEntry, Helpers, Query}
+  alias MishkaCmsCore.Activity.Behaviours.UnionSource
   alias MishkaCmsCore.Activity.Sources.{EventLog, Oban, RuntimeDraft, PaperTrail}
   alias MishkaCmsCore.Layouts.TopbarNeeds
   alias MishkaCmsCore.Skip
@@ -44,6 +53,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
       end
 
       Skip.subscribe()
+      UnionSource.subscribe(socket.assigns.current_user)
     end
 
     new_socket =
@@ -54,6 +64,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
       |> assign(:url_state, nil)
       |> assign(:counts, nil)
       |> assign(:skip_job, nil)
+      |> assign(:reread?, false)
       |> load_counts()
 
     {:ok, new_socket}
@@ -124,6 +135,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
       false ->
         {:noreply, socket}
     end
+  end
+
+  def handle_info({:activity_changed, _site_id}, %{assigns: %{reread?: true}} = socket),
+    do: {:noreply, socket}
+
+  def handle_info({:activity_changed, _site_id}, socket) do
+    send(self(), :reread_activity)
+    {:noreply, assign(socket, :reread?, true)}
+  end
+
+  def handle_info(:reread_activity, socket) do
+    send_update(MishkaGervaz.Table.Web.Live, id: @table_id, gervaz_refresh: true)
+
+    new_socket =
+      socket
+      |> assign(:reread?, false)
+      |> load_counts()
+
+    {:noreply, new_socket}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}

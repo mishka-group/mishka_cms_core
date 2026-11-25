@@ -5,7 +5,9 @@
 defmodule MishkaCmsCore.Test.Plugins.ActivityUnionLive do
   @moduledoc """
   Test plugin for `activity:sources`: a union source whose one row a test writes with `write/1`,
-  carrying a badge of its own.
+  so a test can see a row the open log was not told about stay away, and one it was told about
+  (`MishkaCmsCore.Activity.Behaviours.UnionSource.changed/1`) arrive without a reload. Its row
+  carries a badge of its own.
   """
   use MishkaCmsCore.ProviderRegistry, event: "activity:sources", priority: 55
 

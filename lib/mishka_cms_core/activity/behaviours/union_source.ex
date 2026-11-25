@@ -61,12 +61,28 @@ defmodule MishkaCmsCore.Activity.Behaviours.UnionSource do
   ONE BROKEN BRANCH EMPTIES THE WHOLE LOG. The read is one query, so SQL that Postgres refuses fails
   every source with it, and the log answers "no matching events" (the failure is logged). A branch
   that raises or answers anything but `{sql, params}` is left out of the read on its own.
+
+  ## New rows while the log is open
+
+  The open Activity page reads the core's records live, but it cannot know when a source's table
+  gains a row. A source tells it with `changed/1`, after the row is written, with the site the row
+  belongs to (`nil` for a row of no site):
+
+      MishkaCmsCore.Activity.Behaviours.UnionSource.changed(order.site_id)
+
+  Every open log that may show that site's rows (its own site's, and every master's) reads its first
+  page and its counts again, once for the changes that arrive together, so a burst of rows written in
+  one go costs one read. The log keeps its filters, and a row the viewer may not see stays out, as
+  on any read. The message is `{:activity_changed, site_id}` on `topic/1`; a page of its own may
+  `subscribe/1` to it too.
   """
 
   alias MishkaCmsCore.Activity.Behaviours.Source
+  alias MishkaCmsCore.Activity.Helpers
   alias MishkaCmsCore.ProviderRegistry
 
   @event "activity:sources"
+  @topic "activity:changed"
 
   @typedoc """
   The read a branch is asked for. `site_id` is the one site read, `nil` for every site (a master);
@@ -97,6 +113,41 @@ defmodule MishkaCmsCore.Activity.Behaviours.UnionSource do
   @doc "The event a union source registers on."
   @spec event() :: String.t()
   def event, do: @event
+
+  @doc """
+  The `MishkaCmsCore.PubSub` topic a log of `site_id`'s rows hears `{:activity_changed, site_id}` on;
+  `nil` is every site's, the one a master's log hears.
+  """
+  @spec topic(String.t() | nil) :: String.t()
+  def topic(nil), do: @topic
+  def topic(site_id) when is_binary(site_id), do: @topic <> ":" <> site_id
+
+  @doc """
+  Subscribes the calling process to the topic of what `viewer` may see: every site's for a master,
+  its own site's for a site user, and none for anyone else
+  (`MishkaCmsCore.Activity.Helpers.reach/1`).
+  """
+  @spec subscribe(map() | nil) :: :ok | {:error, term()}
+  def subscribe(viewer) do
+    case Helpers.reach(viewer) do
+      :everything -> Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, topic(nil))
+      {:site, site_id} -> Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, topic(site_id))
+      :nothing -> :ok
+    end
+  end
+
+  @doc """
+  Tells every open activity log that may show `site_id`'s rows that a source wrote new ones: the
+  logs of that site and every master's log. Call it after the row is written (see "New rows while
+  the log is open"); `nil` is a row of no site, which only a master's log shows.
+  """
+  @spec changed(String.t() | nil) :: :ok
+  def changed(site_id) when is_binary(site_id) or is_nil(site_id) do
+    for topic <- Enum.uniq([topic(site_id), topic(nil)]),
+        do: Phoenix.PubSub.broadcast(MishkaCmsCore.PubSub, topic, {:activity_changed, site_id})
+
+    :ok
+  end
 
   @doc "Every union source installed, the first of each id."
   @spec all() :: [module()]
