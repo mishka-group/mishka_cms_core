@@ -213,9 +213,9 @@ defmodule MishkaCmsCore.MixProject do
         "sobelow --config",
         "deps.audit",
         "dialyzer",
-        # The 92 are the Ash resource DSL blocks and the dashboard LiveView index modules, repeated by
+        # The 91 are the Ash resource DSL blocks and the dashboard LiveView index modules, repeated by
         # design (#87); a new clone fails the build.
-        "ex_dna --max-clones 92",
+        "ex_dna --max-clones 91",
         "test"
       ]
     ]

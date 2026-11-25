@@ -9,8 +9,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive do
   runtime status (`MishkaCmsCore.Runtime.RuntimeStatus`) as a live timeline that
   refreshes while open.
 
-  Each page keeps its own `handle_info/2` and `handle_async/3` clauses (so they
-  stay grouped) and delegates the body here:
+  Each page keeps its own `handle_info/2` clauses (so they stay grouped) and delegates the body
+  here; its one `handle_async/3` clause hands the status load to `PreviewHelpers.async_result/3`,
+  which calls `loaded/2`:
 
       def mount(_p, _s, socket) do
         socket =
@@ -29,8 +30,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive do
       def handle_info({:expand_row, id}, socket),
         do: {:noreply, RuntimeStatusLive.expand(socket, id)}
 
-      def handle_async({:runtime_status_load, _id}, result, socket),
-        do: {:noreply, RuntimeStatusLive.loaded(socket, result)}
+      def handle_async(name, result, socket),
+        do: {:noreply, PreviewHelpers.async_result(socket, name, result)}
 
   `setup/2` MUST run before `ActivityFeed.setup/2`: the feed attaches a hook that
   `{:halt}`s Oban broadcasts, and the realtime refresh here needs to see them
