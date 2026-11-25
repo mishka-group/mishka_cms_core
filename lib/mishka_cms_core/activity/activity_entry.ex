@@ -36,7 +36,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
     primary_read_warning?: false
 
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
-  import Phoenix.Component, only: [sigil_H: 2]
+  import Phoenix.Component, only: [sigil_H: 2, link: 1]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
   alias MishkaCmsCore.Activity.{Helpers, Query}
@@ -57,7 +57,8 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
     :badge_tone,
     :actor_label,
     :site_label,
-    :skip_reason
+    :skip_reason,
+    :link
   ]
 
   @default_limit 20
@@ -87,7 +88,8 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
             :resource_label,
             :message,
             :kind,
-            :skip_reason
+            :skip_reason,
+            :link
           ]
 
           label fn -> dgettext("mishka_gervaz", "Activity") end
@@ -97,6 +99,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
           render fn record ->
             assigns = %{
               message: record.message,
+              link: record.link,
               resource_label: record.resource_label,
               outcome: MishkaCmsCore.Activity.ActivityEntry.job_outcome(record),
               skip_reason: record.skip_reason
@@ -104,7 +107,15 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
 
             ~H"""
             <div class="flex flex-wrap items-center gap-2">
-              <span class="text-[13px] font-semibold text-[#1b1a18]">{@message}</span>
+              <.link
+                :if={@link}
+                navigate={@link}
+                data-role="entry-link"
+                class="text-[13px] font-semibold text-[#1b1a18] underline-offset-2 hover:text-[#5b57d6] hover:underline"
+              >
+                {@message}
+              </.link>
+              <span :if={!@link} class="text-[13px] font-semibold text-[#1b1a18]">{@message}</span>
               <span class="rounded-md bg-[#eeedfb] px-[7px] py-0.5 text-[8.5px] font-bold tracking-[0.05em] text-[#5b57d6]">
                 {@resource_label}
               </span>
@@ -418,6 +429,10 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
     attribute :actor_label, :string, public?: true
     attribute :site_label, :string, public?: true
     attribute :skip_reason, :string, public?: true
+
+    # A path of the same site the message links to (an order's page); a source sets it when its
+    # record has a page, and `from_entry/1` keeps only a local path (`Helpers.local_path/1`).
+    attribute :link, :string, public?: true
   end
 
   @doc """
@@ -429,8 +444,14 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
   and simply gets no heading.
   """
   def from_entry(entry) do
+    fields =
+      entry
+      |> Map.take(@entry_keys)
+      |> Map.put(:kind, kind_of(entry))
+      |> Map.put(:link, Helpers.local_path(Map.get(entry, :link)))
+
     __MODULE__
-    |> struct(entry |> Map.take(@entry_keys) |> Map.put(:kind, kind_of(entry)))
+    |> struct(fields)
     |> Ash.Resource.put_metadata(:first_of_day?, Map.get(entry, :first_of_day?, false))
     |> Ash.Resource.put_metadata(:day_count, Map.get(entry, :day_count, 0))
   end

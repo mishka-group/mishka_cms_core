@@ -633,8 +633,9 @@ defmodule MishkaCmsCore.Activity.Query do
   Grouped options for the resource/source `:select` filter — one `{extension_label,
   [{resource_label, module_string}]}` group per extension (so same-named resources
   in different extensions, e.g. Blog vs Document "Tag", stay distinct).
-  Covers version parent modules + distinct event-log `resource` values; the value
-  is the module string the SQL filters on.
+  Covers version parent modules, distinct event-log `resource` values and the resources each
+  union source files its rows under (`MishkaCmsCore.Activity.Behaviours.UnionSource.resources/1`,
+  with the label the source gives); the value is the module string the SQL filters on.
   """
   def resource_options do
     versions = Enum.map(Discovery.paper_trailed(), &to_string/1)
@@ -645,11 +646,23 @@ defmodule MishkaCmsCore.Activity.Query do
       |> Enum.filter(&valid_ident?/1)
       |> Enum.flat_map(&distinct_event_resources/1)
 
-    (versions ++ events ++ Enum.map(@draft_tables, & &1.module))
+    union =
+      UnionSource.resources()
+      |> Enum.filter(&valid_module?(elem(&1, 1)))
+      |> Map.new(fn {label, module} -> {module, label} end)
+
+    (versions ++ events ++ Enum.map(@draft_tables, & &1.module) ++ Map.keys(union))
     |> Enum.uniq()
-    |> Enum.group_by(&group_label_of/1, &{resource_label_of(&1), &1})
+    |> Enum.group_by(&group_label_of/1, &{option_label(&1, union), &1})
     |> Enum.map(fn {group, opts} -> {group, Enum.sort_by(opts, &elem(&1, 0))} end)
     |> Enum.sort_by(&elem(&1, 0))
+  end
+
+  defp option_label(module, union) do
+    case Map.fetch(union, module) do
+      {:ok, label} -> Helpers.translate(label)
+      :error -> resource_label_of(module)
+    end
   end
 
   defp group_label_of(resource_string) do

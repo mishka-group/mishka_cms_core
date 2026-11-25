@@ -16,6 +16,7 @@ defmodule MishkaCmsCore.Activity.UnionSourceTest do
 
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsCore.Activity.ActivityEntry
   alias MishkaCmsCore.Activity.Behaviours.UnionSource
   alias MishkaCmsCore.Activity.Query
   alias MishkaCmsCore.Test.EventCannotRun
@@ -124,6 +125,41 @@ defmodule MishkaCmsCore.Activity.UnionSourceTest do
       assert probe_rows(%{severity: "warn"}) == []
       assert probe_rows(%{kind: "job"}) == []
       assert probe_rows(%{resources: ["Elixir.MishkaCmsCore.Runtime.Media"]}) == []
+    end
+  end
+
+  describe "a union source's resources and links" do
+    setup do
+      register!(ActivityUnionProbe)
+      :ok
+    end
+
+    test "the resources it names join the Resource filter, with its own label" do
+      options = Query.resource_options() |> Enum.flat_map(&elem(&1, 1))
+
+      assert {"Probe record", "Elixir.MishkaCmsCore.Test.ProbeRecord"} in options
+    end
+
+    test "a source that names none adds nothing" do
+      assert UnionSource.resources([ActivityUnionBroken]) == []
+      assert UnionSource.resources([ActivityUnionProbe]) == ActivityUnionProbe.resources()
+    end
+
+    test "its entry's link reaches the log's read" do
+      {:ok, entries} = Ash.read(ActivityEntry, authorize?: false, page: false)
+
+      assert %ActivityEntry{link: link} = Enum.find(entries, &(&1.badge_label == "PROBE"))
+      assert link == ActivityUnionProbe.link()
+    end
+
+    test "a link to another host never reaches the log" do
+      for link <- ["//evil.com/x", "https://evil.com", "/\\evil.com", "javascript:alert(1)", 7] do
+        entry = ActivityEntry.from_entry(%{id: "x", link: link})
+
+        assert entry.link == nil, "#{inspect(link)} was kept"
+      end
+
+      assert ActivityEntry.from_entry(%{id: "x", link: "/admin/a?b=1"}).link == "/admin/a?b=1"
     end
   end
 
