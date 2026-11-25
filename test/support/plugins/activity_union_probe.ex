@@ -7,7 +7,9 @@ defmodule MishkaCmsCore.Test.Plugins.ActivityUnionProbe do
   Test plugin for `activity:sources`: a union source with no table of its own, whose branch is one
   shared row carrying a parameter of its own, so a test can see a plugin's rows reach the log
   through the core's filters and its own values arrive bound, not written into the SQL. Its row
-  links to a page of the site, and it names one resource of its own for the Resource filter.
+  links to a page of the site, and it names one resource of its own for the Resource filter. Its
+  sentence is searchable (`sentences/0`), beside one action that is no plain name and must never
+  reach the SQL.
   """
   use MishkaCmsCore.ProviderRegistry, event: "activity:sources", priority: 50
 
@@ -32,19 +34,22 @@ defmodule MishkaCmsCore.Test.Plugins.ActivityUnionProbe do
   def id, do: "probe"
 
   @impl MishkaCmsCore.Activity.Behaviours.UnionSource
-  def union_branch(%{site_id: site_id, severity: severity, shown: shown, first_param: n}) do
+  def union_branch(%{site_id: site_id, severity: severity, shown: shown, first_param: n} = read) do
     sql = """
     (SELECT 'probe' AS source, #{@resource} AS resource, 'update' AS action,
             NULL::text AS source_id, 'probe-row' AS event_id, site_id::text AS site_id,
             NULL::text AS user_id, (now() AT TIME ZONE 'utc') AS inserted_at,
             jsonb_build_object('said', $#{n}::text) AS payload
        FROM (SELECT NULL::uuid AS site_id) probe
-      WHERE TRUE#{Query.version_site_clause(site_id, true)}#{Query.content_severity_clause(severity, "'update'")}#{Query.resource_clause(@resource)}#{Query.shown_clause(@resource, shown)}#{Query.search_clause(["$#{n}::text"])}
+      WHERE TRUE#{Query.version_site_clause(site_id, true)}#{Query.content_severity_clause(severity, "'update'")}#{Query.resource_clause(@resource)}#{Query.shown_clause(@resource, shown)}#{Query.search_clause(["$#{n}::text"], "'update'", read.search_actions)}
       LIMIT $1)\
     """
 
     {sql, [@said]}
   end
+
+  @impl MishkaCmsCore.Activity.Behaviours.UnionSource
+  def sentences, do: [{"update", "Probe record updated"}, {"not a name'--", "updated"}]
 
   @impl MishkaCmsCore.Activity.Behaviours.UnionSource
   def resources, do: [{"Probe record", "Elixir.MishkaCmsCore.Test.ProbeRecord"}]

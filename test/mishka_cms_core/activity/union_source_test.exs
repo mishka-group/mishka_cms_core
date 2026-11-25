@@ -128,6 +128,41 @@ defmodule MishkaCmsCore.Activity.UnionSourceTest do
     end
   end
 
+  describe "searching a union source's sentence" do
+    setup do
+      register!(ActivityUnionProbe)
+      :ok
+    end
+
+    test "a word only its sentence says finds its row, in any case" do
+      assert [_entry] = probe_rows(%{search: "updated"})
+      assert [_entry] = probe_rows(%{search: "  PROBE RECORD UPDATED "})
+      assert probe_rows(%{search: "deleted"}) == []
+    end
+
+    test "and the counts agree with the list" do
+      assert Query.total(%{search: "updated"}) >= 1
+      assert Query.total(%{search: "probe record updated"}) == 1
+    end
+
+    test "only the actions whose sentence holds the search are asked for" do
+      assert UnionSource.search_actions(ActivityUnionProbe, "record upd") == ["update"]
+      assert UnionSource.search_actions(ActivityUnionProbe, "deleted") == []
+      assert UnionSource.search_actions(ActivityUnionProbe, "   ") == []
+      assert UnionSource.search_actions(ActivityUnionProbe, nil) == []
+      assert UnionSource.search_actions(ActivityUnionBroken, "updated") == []
+    end
+
+    test "an action that is no plain name never reaches the SQL" do
+      assert "not a name'--" in UnionSource.search_actions(ActivityUnionProbe, "updated")
+
+      {_entries, sqls} = sql_of(fn -> Query.page(%{search: "updated"}) end)
+
+      assert Enum.any?(sqls, &(&1 =~ "'update' IN ('update')"))
+      refute Enum.any?(sqls, &(&1 =~ "not a name"))
+    end
+  end
+
   describe "a union source's resources and links" do
     setup do
       register!(ActivityUnionProbe)
