@@ -6,7 +6,8 @@ defmodule MishkaCmsCoreWeb.Test.TopbarPhoneTest do
   @moduledoc """
   The top bar on a phone, below 640px: 60px tall, the menu button, the heading of the open page
   taken from the sidebar's entry (`MishkaCmsCore.Sidebar.section/1`) and the bell with its badge;
-  the search box, the extensions' items and the theme toggle are left out.
+  the search box, the extensions' items and the theme toggle are left out. And the menu that
+  button slides in, which stays out of sight while it is closed.
   """
   use MishkaCmsCore.ConnCase, async: false
 
@@ -119,6 +120,26 @@ defmodule MishkaCmsCoreWeb.Test.TopbarPhoneTest do
 
       # A long one-word title is hyphenated, never cut in the middle of a word.
       assert classes(html, "#admin-phone-section [data-role=title]") =~ "hyphens-auto"
+    end
+  end
+
+  describe "the closed menu" do
+    test "sits farther past the left edge than its shadow reaches, so no pale band shows" do
+      user = create_user_with_permissions!(["admin:dashboard:*"])
+
+      html =
+        (&Layouts.sidebar/1)
+        |> render_component(current_user: user, current_path: "/admin/dashboard")
+        |> LazyHTML.from_fragment()
+
+      sidebar = classes(html, "#admin-sidebar")
+
+      [_, past_edge] =
+        Regex.run(~r/max-\[980px\]:-translate-x-\[calc\(100%\+(\d+)px\)\]!/, sidebar)
+
+      [_, blur] = Regex.run(~r/max-\[980px\]:shadow-\[0_\d+px_(\d+)px_/, sidebar)
+
+      assert String.to_integer(past_edge) > String.to_integer(blur)
     end
   end
 

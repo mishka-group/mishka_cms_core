@@ -196,10 +196,11 @@ defmodule MishkaCmsCore.Layouts do
     <%!-- ON A NARROW SCREEN THE MENU SLIDES IN FROM THE LEFT in either direction: its open state is
           one `translate-x-0!` added by the menu button, which a right-to-left closed state would
           have to be ordered against. Everything else here is start and end, and turns with
-          `<html dir>`. --%>
+          `<html dir>`. Closed, it sits 100px past the left edge, beyond the reach of its 70px
+          shadow, so no pale band runs down the page while it is hidden. --%>
     <aside
       id="admin-sidebar"
-      class="flex h-full w-[266px] shrink-0 flex-col border-e border-[#ecebe6] bg-white p-[16px_14px] max-[980px]:fixed! max-[980px]:inset-y-0 max-[980px]:left-0 max-[980px]:z-[90] max-[980px]:-translate-x-[105%]! max-[980px]:pb-[max(16px,env(safe-area-inset-bottom))]! max-[980px]:shadow-[0_24px_70px_rgba(20,18,26,0.35)] max-[980px]:transition-transform"
+      class="flex h-full w-[266px] shrink-0 flex-col border-e border-[#ecebe6] bg-white p-[16px_14px] max-[980px]:fixed! max-[980px]:inset-y-0 max-[980px]:left-0 max-[980px]:z-[90] max-[980px]:-translate-x-[calc(100%+100px)]! max-[980px]:pb-[max(16px,env(safe-area-inset-bottom))]! max-[980px]:shadow-[0_24px_70px_rgba(20,18,26,0.35)] max-[980px]:transition-transform"
     >
       <div class="mb-1.5 flex items-center gap-3 border-b border-[#e6e4de] px-1.5 pb-[18px] pt-1">
         <div class="flex size-[44px] items-center justify-center rounded-[14px] border border-[#e4e2f7] bg-[radial-gradient(120%_120%_at_30%_20%,#ffffff,#f4f3fd)] shadow-[0_6px_16px_rgba(79,75,204,0.14),inset_0_1px_0_#fff]">
