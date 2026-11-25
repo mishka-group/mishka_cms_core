@@ -32,6 +32,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
 
   alias MishkaCmsCore.Activity.{ActivityEntry, Helpers, Query}
   alias MishkaCmsCore.Activity.Behaviours.UnionSource
+  alias MishkaCmsCore.Activity.Events.SearchAsTyped
   alias MishkaCmsCore.Activity.Sources.{EventLog, Oban, RuntimeDraft, PaperTrail}
   alias MishkaCmsCore.Layouts.TopbarNeeds
   alias MishkaCmsCore.Skip
@@ -92,7 +93,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
 
   @impl true
   def handle_params(params, uri, socket) do
-    url_state = UrlSync.decode(params, uri, ActivityEntry)
+    url_state =
+      params
+      |> UrlSync.decode(uri, ActivityEntry)
+      |> SearchAsTyped.keep_search(params)
+
     {:noreply, assign(socket, :url_state, url_state)}
   end
 

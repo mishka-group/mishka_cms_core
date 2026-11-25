@@ -31,6 +31,9 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
   match), so the page asks it in `MishkaCmsCoreWeb.Live.Admin.Components.SkipQuestion`. The
   Severity filter's Skipped choice lists the skipped jobs, which the Error choice and the error
   count leave out.
+
+  The search is read as typed, tags and all (`MishkaCmsCore.Activity.Events.SearchAsTyped`): it is a
+  bound parameter, never HTML, so `<b>bold</b>` looks for that text rather than quietly for `bold`.
   """
   use Ash.Resource,
     domain: MishkaCmsCore.Activity.Domain,
@@ -323,6 +326,10 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
 
       row do
         selectable false
+      end
+
+      events do
+        sanitization MishkaCmsCore.Activity.Events.SearchAsTyped
       end
 
       pagination do

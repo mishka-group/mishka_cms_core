@@ -6,7 +6,8 @@ defmodule MishkaCmsCoreWeb.Live.ActivityUnionLiveTest do
   @moduledoc """
   The Activity page with a union source (`MishkaCmsCore.Activity.Behaviours.UnionSource`): a row
   draws its source's badge, a row the source announces with `changed/1` arrives without a reload
-  (once for a burst, and only on the logs that may show its site).
+  (once for a burst, and only on the logs that may show its site), and the search keeps what the
+  admin typed, tags and all, in the box, the URL and the read.
   """
   use MishkaCmsCore.ConnCase, async: false
 
@@ -120,6 +121,30 @@ defmodule MishkaCmsCoreWeb.Live.ActivityUnionLiveTest do
     end
   end
 
+  describe "the search" do
+    test "keeps the tags it was typed with, in the box, the URL and the read", %{
+      conn: conn,
+      master: master
+    } do
+      ActivityUnionLive.write("bold order")
+      view = open(conn, master, @path)
+      assert render(view) =~ "bold order"
+
+      view |> element("form[phx-change=filter]") |> render_change(%{"search" => "<b>bold</b>"})
+      path = assert_patch(view)
+      settle(view)
+
+      assert URI.decode_query(URI.parse(path).query)["activity_filter_search"] == "<b>bold</b>"
+      assert search_box(view) == "<b>bold</b>"
+      refute render(view) =~ "bold order"
+
+      reloaded = open(conn, master, path)
+
+      assert search_box(reloaded) == "<b>bold</b>"
+      refute render(reloaded) =~ "bold order"
+    end
+  end
+
   defp save_site!(site) do
     SiteState.save(%{
       id: site.id,
@@ -139,6 +164,15 @@ defmodule MishkaCmsCoreWeb.Live.ActivityUnionLiveTest do
     after
       0 -> Enum.reverse(heard)
     end
+  end
+
+  defp search_box(view) do
+    view
+    |> element("form[phx-change=filter] input[name=search]")
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.attribute("value")
+    |> List.first()
   end
 
   defp mounted(user) do
