@@ -5,6 +5,10 @@
 # Warnings `mix dialyzer` reports that are not defects. Each one is named by file, kind and line,
 # so a new warning of the same kind in the same file is still reported.
 [
+  # mishka_gervaz 0.0.13's `use MishkaGervaz.Form.Web.Events.SubmitHandler` expands
+  # `(state.failed_saves || 0)` into this module; the counter is never nil, so the `|| 0` guard can
+  # never be true. Harmless, and gone with the gervaz release that drops the `|| 0`.
+  {"lib/mishka_cms_core_web/forms/component_submit.ex", :guard_fail, 35},
   # MapSet, :sets and Phoenix.LiveView.JS are opaque types: dialyzer reports a call that reads one
   # through its struct, which is what the standard library and LiveView do themselves.
   {"lib/mishka_cms_core/accounts/__calculations/by_master.ex", :call_without_opaque, 40},
