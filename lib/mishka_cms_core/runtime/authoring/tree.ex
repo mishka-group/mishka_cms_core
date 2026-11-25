@@ -48,6 +48,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
 
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.Runtime.Authoring.Tree.Styles
 
@@ -564,6 +565,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
 
   defp entry_name(entry), do: Map.get(entry, :name)
 
+  defp entry_attrs(%{attrs: attrs}) when is_list(attrs), do: attrs
+  defp entry_attrs(_entry), do: []
+
   defp entry_scope(entry, site) do
     case Map.get(entry, :global?, true) do
       true -> "Global"
@@ -582,6 +586,55 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   end
 
   defp put_site(node, _scopes), do: node
+
+  @doc """
+  The tree as a save writes it into the page, which is not always the tree the editor draws.
+
+    * A component that declares a `current_user` attribute is handed the page's visitor,
+      `current_user={assigns[:current_user]}`, where the author did not write one. The author never
+      has to: the Inspector does not offer the attribute (`Inspector.handed/0`), and a published
+      page reads the visitor only when its own source names it
+      (`MishkaCmsCore.Runtime.Compilers.UserClosure`), so this is what makes a per-visitor block
+      placed from the palette draw for the person who looks. `assigns[:current_user]` rather than
+      `@current_user`, so a component's own template that places one does not raise where the
+      visitor was never handed to it.
+    * An attribute the component marks `opts.canvas_only` (`Inspector.canvas_only?/1`), such as which
+      visitor a block is drawn for while it is edited, is left out.
+
+  `components` is the palette, whose entries carry each component's declared `attrs`. A component
+  the palette does not know is left as written.
+  """
+  @spec saved(t(), [map()]) :: t()
+  def saved(%__MODULE__{} = tree, components) do
+    declared = Map.new(components, &{entry_name(&1), entry_attrs(&1)})
+
+    %{tree | nodes: Map.new(tree.nodes, fn {id, node} -> {id, saved_node(node, declared)} end)}
+  end
+
+  @visitor {"current_user", {:expr, "assigns[:current_user]"}}
+
+  defp saved_node(%Node{kind: :component, attrs: attrs} = node, declared) do
+    with name when is_binary(name) <- Node.component_name(node),
+         {:ok, [_ | _] = names} <- Map.fetch(declared, name) do
+      canvas_only = for attr <- names, Inspector.canvas_only?(attr), do: Inspector.name(attr)
+      kept = Enum.reject(attrs, fn {attr, _value} -> attr in canvas_only end)
+
+      %{node | attrs: visitor(kept, Enum.any?(names, &(Inspector.name(&1) == "current_user")))}
+    else
+      _unknown -> node
+    end
+  end
+
+  defp saved_node(node, _declared), do: node
+
+  defp visitor(attrs, true) do
+    case List.keymember?(attrs, "current_user", 0) do
+      true -> attrs
+      false -> attrs ++ [@visitor]
+    end
+  end
+
+  defp visitor(attrs, false), do: attrs
 
   @doc """
   Re-mints every id in a tree, keeping the structure. Used by duplicate and by paste, so a pasted

@@ -6,7 +6,8 @@ defmodule MishkaCmsCoreWeb.Test.TopbarPhoneTest do
   @moduledoc """
   The top bar on a phone, below 640px: 60px tall, the menu button, the heading of the open page
   taken from the sidebar's entry (`MishkaCmsCore.Sidebar.section/1`) and the bell with its badge;
-  the search box, the extensions' items and the theme toggle are left out.
+  the search box, the extensions' items and the theme toggle are left out. And the menu that
+  button slides in, which stays out of sight while it is closed.
   """
   use MishkaCmsCore.ConnCase, async: false
 
@@ -95,6 +96,50 @@ defmodule MishkaCmsCoreWeb.Test.TopbarPhoneTest do
       end
 
       refute classes(html, "#topbar-bell") =~ "#{@phone}:hidden"
+    end
+  end
+
+  describe "on a touch screen" do
+    @touch "pointer-coarse"
+
+    test "every button of the bar is 44 px, and a narrow search is the phone's icon" do
+      html = topbar(section: %{eyebrow: nil, title: "Subscriptions"}, notification_count: 1)
+
+      for selector <-
+            ~w(#admin-menu-button #topbar-bell button[data-phx-theme=dark] button[data-phx-theme=light]),
+          do: assert(classes(html, selector) =~ "#{@touch}:size-11")
+
+      assert classes(html, "#topbar-user-button") =~ "#{@touch}:min-h-11"
+      assert attr(html, "button[data-phx-theme=dark]", "aria-label") == "Switch to dark"
+
+      assert classes(html, "#admin-topbar-search") =~ "@container"
+      assert classes(html, "#admin-topbar-search") =~ "#{@phone}:[container-type:normal]"
+      assert classes(html, "#admin-topbar-search-box") =~ "@max-[12rem]:hidden!"
+      assert classes(html, "#admin-topbar-search-phone") =~ "@max-[12rem]:flex!"
+      assert classes(html, "#admin-topbar-search-form input") =~ "#{@touch}:h-11"
+
+      # A long one-word title is hyphenated, never cut in the middle of a word.
+      assert classes(html, "#admin-phone-section [data-role=title]") =~ "hyphens-auto"
+    end
+  end
+
+  describe "the closed menu" do
+    test "sits farther past the left edge than its shadow reaches, so no pale band shows" do
+      user = create_user_with_permissions!(["admin:dashboard:*"])
+
+      html =
+        (&Layouts.sidebar/1)
+        |> render_component(current_user: user, current_path: "/admin/dashboard")
+        |> LazyHTML.from_fragment()
+
+      sidebar = classes(html, "#admin-sidebar")
+
+      [_, past_edge] =
+        Regex.run(~r/max-\[980px\]:-translate-x-\[calc\(100%\+(\d+)px\)\]!/, sidebar)
+
+      [_, blur] = Regex.run(~r/max-\[980px\]:shadow-\[0_\d+px_(\d+)px_/, sidebar)
+
+      assert String.to_integer(past_edge) > String.to_integer(blur)
     end
   end
 

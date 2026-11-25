@@ -523,6 +523,23 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   def node_class(_value), do: "bg-[#e6f6ee]"
 
   @doc """
+  The `bg-`/`text-` pair of an entry's badge for its `badge_tone`: `:emerald`, `:sky`, `:amber`,
+  `:rose`, `:indigo`, `:violet`, `:teal` or `:fuchsia`; any other tone, `nil` included, is the
+  neutral grey. The log's rows and the activity feed both draw an entry's badge with it, so a source
+  that sets `badge_label` and `badge_tone` looks the same in each.
+  """
+  @spec badge_class(atom() | nil) :: String.t()
+  def badge_class(:emerald), do: "bg-[#e6f6ee] text-[#177a53]"
+  def badge_class(:sky), do: "bg-[#e6f1fa] text-[#276fa3]"
+  def badge_class(:amber), do: "bg-[#fbf1df] text-[#a5691a]"
+  def badge_class(:rose), do: "bg-[#fbe9e7] text-[#b3433a]"
+  def badge_class(:indigo), do: "bg-[#eeedfb] text-[#4f4bcc]"
+  def badge_class(:violet), do: "bg-[#eeedfb] text-[#4f4bcc]"
+  def badge_class(:teal), do: "bg-[#e6f6ee] text-[#177a53]"
+  def badge_class(:fuchsia), do: "bg-[#fbe8f0] text-[#a83f6d]"
+  def badge_class(_tone), do: "bg-[#f2f1ec] text-[#6d6a63]"
+
+  @doc """
   The `bg-`/`text-` pair an actor avatar carries for a row of this palette value — the same tint the
   node beside it uses, so the two always agree. Takes the row's tone-or-severity, not the actor: the
   name already says who that was.

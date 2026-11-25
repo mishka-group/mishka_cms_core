@@ -99,13 +99,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.JsHook.Index do
   end
 
   @impl true
-  def handle_async({:runtime_status_load, _id}, result, socket) do
-    {:noreply, RuntimeStatusLive.loaded(socket, result)}
-  end
-
-  def handle_async(name, result, socket)
-      when name in [:load_preview, :preview_versions, :preview_compile, :preview_metrics],
-      do: {:noreply, PreviewHelpers.async_result(socket, name, result)}
+  def handle_async(name, result, socket),
+    do: {:noreply, PreviewHelpers.async_result(socket, name, result)}
 
   ## Preview modal
 

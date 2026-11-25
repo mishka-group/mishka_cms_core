@@ -1836,6 +1836,22 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     """
     #{heroicons_plugin()}
 
+    #{custom_variants()}
+    """
+  end
+
+  @doc """
+  The variants every compile of a site's CSS declares: the LiveView loading states, and `dark` read
+  from `data-theme="dark"` rather than from the visitor's system setting.
+
+  Public so that a document Tailwind's browser generator styles, such as the page builder's canvas,
+  declares the same ones (`MishkaCmsCore.Runtime.RuntimePreview.theme_source/1`): without them a
+  `dark:` class the generator makes follows the author's system setting, and a light block draws
+  dark on the canvas of an author whose computer is in dark mode while the published page is light.
+  """
+  @spec custom_variants() :: String.t()
+  def custom_variants do
+    """
     @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
     @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
     @custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);

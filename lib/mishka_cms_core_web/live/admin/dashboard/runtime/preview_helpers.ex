@@ -17,7 +17,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
       def handle_info({:row_action, "show_preview_modal", %{"id" => id}}, s),
         do: {:noreply, PreviewHelpers.open(s, id)}
 
-      def handle_async(name, result, s) when name in [:load_preview, :preview_versions, :preview_compile],
+      def handle_async(name, result, s),
         do: {:noreply, PreviewHelpers.async_result(s, name, result)}
 
       def handle_event("preview_set_tab", %{"tab" => t}, s),
@@ -79,6 +79,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   alias MishkaCmsCoreWeb.Templates.VersionHistory
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
+  alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
   alias MishkaCmsCore.Runtime.RenderMetrics
 
   # The host's endpoint, named by configuration rather than hardcoded — this library does not know
@@ -444,13 +445,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   end
 
   @doc """
-  Route one of the modal's async operations to its own handler.
+  Route one of a runtime page's async operations to its own handler: the modal's operations and the
+  expanded row's status load.
 
-  Each page carries a single `handle_async/3` clause guarded on the names it can start and delegates
-  here. They are SEPARATE names on purpose: `start_async/3` cancels an in-flight task of the same
-  name, so sharing one would mean a click on the Versions pager killing the record load that opened
-  the modal, or a tab switch killing a compile or a duplicate that is still running.
+  Each page carries a single `handle_async/3` clause that delegates here. The modal's operations are
+  SEPARATE names on purpose: `start_async/3` cancels an in-flight task of the same name, so sharing
+  one would mean a click on the Versions pager killing the record load that opened the modal, or a
+  tab switch killing a compile or a duplicate that is still running.
   """
+  def async_result(socket, {:runtime_status_load, _id}, result),
+    do: RuntimeStatusLive.loaded(socket, result)
+
   def async_result(socket, :load_preview, result), do: loaded(socket, result)
   def async_result(socket, :preview_versions, result), do: versions_loaded(socket, result)
   def async_result(socket, :preview_compile, result), do: compiled(socket, result)

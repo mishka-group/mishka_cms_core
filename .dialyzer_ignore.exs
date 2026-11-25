@@ -5,13 +5,17 @@
 # Warnings `mix dialyzer` reports that are not defects. Each one is named by file, kind and line,
 # so a new warning of the same kind in the same file is still reported.
 [
+  # mishka_gervaz 0.0.13's `use MishkaGervaz.Form.Web.Events.SubmitHandler` expands
+  # `(state.failed_saves || 0)` into this module; the counter is never nil, so the `|| 0` guard can
+  # never be true. Harmless, and gone with the gervaz release that drops the `|| 0`.
+  {"lib/mishka_cms_core_web/forms/component_submit.ex", :guard_fail, 35},
   # MapSet, :sets and Phoenix.LiveView.JS are opaque types: dialyzer reports a call that reads one
   # through its struct, which is what the standard library and LiveView do themselves.
   {"lib/mishka_cms_core/accounts/__calculations/by_master.ex", :call_without_opaque, 40},
   {"lib/mishka_cms_core/accounts/__validations/grant_within_actor_scope.ex", :call_without_opaque,
    89},
   {"lib/mishka_cms_core/accounts/_helper.ex", :call_without_opaque, 130},
-  {"lib/mishka_cms_core/activity/_helpers.ex", :call_without_opaque, 298},
+  {"lib/mishka_cms_core/activity/_helpers.ex", :call_without_opaque, 311},
   {"lib/mishka_cms_core/runtime/authoring/containment.ex", :call_without_opaque, 977},
   {"lib/mishka_cms_core/runtime/authoring/containment.ex", :call_with_opaque, 1000},
   {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_with_opaque, 484},
@@ -21,7 +25,9 @@
   {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_without_opaque, 219},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :call_without_opaque, 190},
   {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex",
-   :call_without_opaque, 1742},
+   :call_without_opaque, 1747},
+  {"lib/mishka_cms_core_web/live/admin/components/extension_installer_panel.ex",
+   :contract_with_opaque, 610},
   {"lib/mishka_cms_core_web/live/admin/components/head_code_modal.ex", :contract_with_opaque, 49},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 465},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 491},
@@ -31,8 +37,8 @@
   # :dev and :test (and to nothing in :prod), and dialyzer runs in :dev. Every function that reaches
   # one is "without a local return", and what depends on it is "never called" or "never matches".
   # The shipped (:prod) shape has none of these.
-  {"lib/mishka_cms_core/builder/events.ex", :no_return, 326},
-  {"lib/mishka_cms_core/builder/events.ex", :no_return, 674},
+  {"lib/mishka_cms_core/builder/events.ex", :no_return, 333},
+  {"lib/mishka_cms_core/builder/events.ex", :no_return, 742},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :pattern_match, 65},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :pattern_match, 82},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :pattern_match, 126},
@@ -44,7 +50,7 @@
   {"lib/mishka_cms_core/runtime/authoring/tree/styles.ex", :pattern_match_cov, 1252},
   {"lib/mishka_cms_core/runtime/resources/__changes/process_file_upload.ex", :pattern_match_cov,
    155},
-  {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 372},
+  {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 382},
 
   # `ProviderStrategy` stands in for AshAuthentication's `OAuth2` strategy struct (same fields, see its
   # moduledoc), and `OAuth2.Plug` is specified for `OAuth2.t()` only.

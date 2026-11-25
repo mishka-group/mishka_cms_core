@@ -18,6 +18,7 @@ defmodule MishkaCmsCore.Builder.EventsTest do
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
   alias MishkaCmsCore.Runtime.Authoring.Strict
+  alias MishkaCmsCore.Test.Plugins.BuilderAttrChoicesPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderComponentNotesPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderSaveGatePlugin
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarInvokedProbe
@@ -211,6 +212,46 @@ defmodule MishkaCmsCore.Builder.EventsTest do
 
       assert_receive {BuilderToolbarInvokedProbe,
                       %{action: "probe-toolbar", node_id: "nabcdefgh", token: "a-session-token"}}
+    end
+  end
+
+  describe "the choices of an attribute" do
+    defp choices_of(source) do
+      Events.attr_choices(%{
+        source: source,
+        component: "acme-product-card",
+        attr: "product",
+        site_id: "site-1",
+        site_name: "acme"
+      })
+    end
+
+    test "with no plugin, an attribute has no choices" do
+      assert choices_of("acme:products") == []
+    end
+
+    test "a plugin's choices come back for its own source, each value once" do
+      register!(BuilderAttrChoicesPlugin, "builder:attr:choices")
+
+      assert [
+               %{value: "photo-pack", label: "Photo pack (site-1)"},
+               %{value: "icon-set", label: "Icon set"}
+             ] = choices_of("acme:products")
+
+      assert choices_of("acme:other") == []
+    end
+
+    test "a choice of another shape is refused out loud in development" do
+      register!(BuilderAttrChoicesPlugin, "builder:attr:choices")
+
+      assert_raise Strict.Violation, ~r/expected %\{value/, fn -> choices_of("acme:broken") end
+    end
+
+    @tag :capture_log
+    test "a plugin that raises costs the choices, never the editor" do
+      register!(BuilderAttrChoicesPlugin, "builder:attr:choices")
+
+      assert choices_of("acme:raise") == []
     end
   end
 

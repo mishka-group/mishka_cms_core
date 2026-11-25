@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.MixProject do
   use Mix.Project
 
-  @version "0.0.6"
+  @version "0.0.7"
   @source_url "https://github.com/mishka-group/mishka_cms_core"
 
   def project do
@@ -114,7 +114,9 @@ defmodule MishkaCmsCore.MixProject do
       {:ash_rate_limiter, "~> 2.0"},
       {:hammer, "~> 7.5"},
       {:remote_ip, "~> 1.2"},
-      {:ash, "~> 3.37"},
+      # 3.38.1 is the first release with both security fixes: forged keysets (CVE-2026-124283), and
+      # keyword input cast with storage casting (CVE-2026-120299).
+      {:ash, "~> 3.38 and >= 3.38.1"},
       # {:ash, github: "ash-project/ash", branch: "main", override: true},
       {:igniter, "~> 0.8", only: [:dev, :test]},
       {:oban, "~> 2.24"},
@@ -151,7 +153,7 @@ defmodule MishkaCmsCore.MixProject do
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
-      mishka_dep(:mishka_installer, "~> 0.1.17"),
+      mishka_dep(:mishka_installer, "~> 0.1.18"),
       {:guarded_struct, "~> 0.1.11"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
@@ -165,7 +167,7 @@ defmodule MishkaCmsCore.MixProject do
       # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
       # is read.
       {:localize, "~> 1.4"},
-      mishka_dep(:mishka_gervaz, "~> 0.0.12"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.13"),
       # Names and slugs: `MishkaCmsCore.Runtime.Resources.Changes.InternalName` and
       # `MishkaCmsCore.Runtime.Languages.slug_locales/1`.
       mishka_dep(:mishka_slug, "~> 0.0.3"),
@@ -211,9 +213,9 @@ defmodule MishkaCmsCore.MixProject do
         "sobelow --config",
         "deps.audit",
         "dialyzer",
-        # The 92 are the Ash resource DSL blocks and the dashboard LiveView index modules, repeated by
+        # The 91 are the Ash resource DSL blocks and the dashboard LiveView index modules, repeated by
         # design (#87); a new clone fails the build.
-        "ex_dna --max-clones 92",
+        "ex_dna --max-clones 91",
         "test"
       ]
     ]

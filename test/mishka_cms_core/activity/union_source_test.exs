@@ -16,6 +16,7 @@ defmodule MishkaCmsCore.Activity.UnionSourceTest do
 
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsCore.Activity.ActivityEntry
   alias MishkaCmsCore.Activity.Behaviours.UnionSource
   alias MishkaCmsCore.Activity.Query
   alias MishkaCmsCore.Test.EventCannotRun
@@ -124,6 +125,76 @@ defmodule MishkaCmsCore.Activity.UnionSourceTest do
       assert probe_rows(%{severity: "warn"}) == []
       assert probe_rows(%{kind: "job"}) == []
       assert probe_rows(%{resources: ["Elixir.MishkaCmsCore.Runtime.Media"]}) == []
+    end
+  end
+
+  describe "searching a union source's sentence" do
+    setup do
+      register!(ActivityUnionProbe)
+      :ok
+    end
+
+    test "a word only its sentence says finds its row, in any case" do
+      assert [_entry] = probe_rows(%{search: "updated"})
+      assert [_entry] = probe_rows(%{search: "  PROBE RECORD UPDATED "})
+      assert probe_rows(%{search: "deleted"}) == []
+    end
+
+    test "and the counts agree with the list" do
+      assert Query.total(%{search: "updated"}) >= 1
+      assert Query.total(%{search: "probe record updated"}) == 1
+    end
+
+    test "only the actions whose sentence holds the search are asked for" do
+      assert UnionSource.search_actions(ActivityUnionProbe, "record upd") == ["update"]
+      assert UnionSource.search_actions(ActivityUnionProbe, "deleted") == []
+      assert UnionSource.search_actions(ActivityUnionProbe, "   ") == []
+      assert UnionSource.search_actions(ActivityUnionProbe, nil) == []
+      assert UnionSource.search_actions(ActivityUnionBroken, "updated") == []
+    end
+
+    test "an action that is no plain name never reaches the SQL" do
+      assert "not a name'--" in UnionSource.search_actions(ActivityUnionProbe, "updated")
+
+      {_entries, sqls} = sql_of(fn -> Query.page(%{search: "updated"}) end)
+
+      assert Enum.any?(sqls, &(&1 =~ "'update' IN ('update')"))
+      refute Enum.any?(sqls, &(&1 =~ "not a name"))
+    end
+  end
+
+  describe "a union source's resources and links" do
+    setup do
+      register!(ActivityUnionProbe)
+      :ok
+    end
+
+    test "the resources it names join the Resource filter, with its own label" do
+      options = Query.resource_options() |> Enum.flat_map(&elem(&1, 1))
+
+      assert {"Probe record", "Elixir.MishkaCmsCore.Test.ProbeRecord"} in options
+    end
+
+    test "a source that names none adds nothing" do
+      assert UnionSource.resources([ActivityUnionBroken]) == []
+      assert UnionSource.resources([ActivityUnionProbe]) == ActivityUnionProbe.resources()
+    end
+
+    test "its entry's link reaches the log's read" do
+      {:ok, entries} = Ash.read(ActivityEntry, authorize?: false, page: false)
+
+      assert %ActivityEntry{link: link} = Enum.find(entries, &(&1.badge_label == "PROBE"))
+      assert link == ActivityUnionProbe.link()
+    end
+
+    test "a link to another host never reaches the log" do
+      for link <- ["//evil.com/x", "https://evil.com", "/\\evil.com", "javascript:alert(1)", 7] do
+        entry = ActivityEntry.from_entry(%{id: "x", link: link})
+
+        assert entry.link == nil, "#{inspect(link)} was kept"
+      end
+
+      assert ActivityEntry.from_entry(%{id: "x", link: "/admin/a?b=1"}).link == "/admin/a?b=1"
     end
   end
 

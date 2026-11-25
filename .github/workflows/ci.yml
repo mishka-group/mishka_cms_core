@@ -26,6 +26,6 @@ jobs:
       tailwind-cache: true
       credence-task: mishka_cms_core.credence
       sobelow: true
-      ex-dna-args: "--max-clones 92"
+      ex-dna-args: "--max-clones 91"
       assets: true
       bun-version: "1.4.4"
