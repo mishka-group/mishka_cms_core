@@ -19,6 +19,10 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
   never another tenant. The `:activity_site` column is shown to everyone (a tenant's
   rows resolve to its own site or "Global").
 
+  Beside its message and resource, a row draws the entry's `badge_label` ("UPDATE", "WORKER", a
+  union source's own) as a chip tinted by its `badge_tone`
+  (`MishkaCmsCoreWeb.Templates.ActivityTimeline.badge_class/1`), for any source that sets one.
+
   A background job that failed carries a red **Failed** badge and a Skip action, and one an admin
   skipped (`MishkaCmsCore.Skip`) a grey **Skipped** badge, its reason and a Bring back action
   (`job_outcome/1`). Both actions are gervaz row actions of type `:event`, answered by the page
@@ -84,6 +88,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
           requires [
             :action,
             :severity,
+            :badge_label,
             :badge_tone,
             :resource_label,
             :message,
@@ -101,6 +106,8 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
               message: record.message,
               link: record.link,
               resource_label: record.resource_label,
+              badge_label: record.badge_label,
+              badge_class: ActivityTimeline.badge_class(record.badge_tone),
               outcome: MishkaCmsCore.Activity.ActivityEntry.job_outcome(record),
               skip_reason: record.skip_reason
             }
@@ -118,6 +125,16 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
               <span :if={!@link} class="text-[13px] font-semibold text-[#1b1a18]">{@message}</span>
               <span class="rounded-md bg-[#eeedfb] px-[7px] py-0.5 text-[8.5px] font-bold tracking-[0.05em] text-[#5b57d6]">
                 {@resource_label}
+              </span>
+              <span
+                :if={@badge_label}
+                data-role="entry-badge"
+                class={[
+                  "rounded-md px-[7px] py-0.5 text-[8.5px] font-bold uppercase tracking-[0.05em]",
+                  @badge_class
+                ]}
+              >
+                {@badge_label}
               </span>
               <span
                 :if={@outcome == :failed}
