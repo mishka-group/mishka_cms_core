@@ -256,9 +256,15 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # components, the `site-main` layout, the home page and the error page a stranger's first install
   # gets, and the pages that stand beside the home — so that path is exercised on every reseed
   # instead of only on somebody else's machine. Its layout is what the showcase pages hang on.
+  #
+  # THE MEDIA LIBRARY FIRST, because a page is written out of it: the team page asks
+  # `MishkaCmsCore.Dev.SeedMedia` what pictures the site has, and a library filled after the first
+  # page reads as one a fresh install had empty — silently, since "no picture" is also what a fresh
+  # install answers.
   defp part("starter_content", :normal, %{sites: sites}, _opts, _log) do
     starter =
       Map.new(sites, fn site ->
+        seed_media(site.id)
         report = StarterContent.seed!(site, starter_opts(site, config_for(site)))
         announce_pages(report)
         {site.id, report.layout_id}
@@ -300,15 +306,11 @@ defmodule MishkaCmsCore.Dev.Seeds do
     global_layout = seed_global_layout()
     seed_global_js_hooks()
 
-    log.(gettext("Creating per-site content (components, pages, media)…"))
+    log.(gettext("Creating per-site content (pages, drafts, hooks)…"))
 
-    # MEDIA BEFORE THE PAGES, because a page is written out of this library: the team page asks
-    # `MishkaCmsCore.Dev.SeedMedia` what pictures the site has, and a page written first is a page
-    # with none — silently, since "no picture" is also what a fresh install answers.
     Enum.each(sites, fn site ->
       main = Map.fetch!(foundation.starter_layouts, site.id)
 
-      seed_media(site.id)
       seed_pages(site, config_for(site), %{main: main, plain: global_layout.id}, site_users)
       seed_page_draft(site)
       seed_js_hooks(site.id, 2)
