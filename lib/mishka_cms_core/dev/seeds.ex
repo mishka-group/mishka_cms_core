@@ -55,11 +55,16 @@ defmodule MishkaCmsCore.Dev.Seeds do
 
   ## An extension adds its own seed on the `dev:seed` event
 
-  The core seeds only its own resources. An extension that has sample data of its own subscribes a
-  plugin to `dev:seed` (`event/0`), and subscribing is declaring, as it is for
-  `installer:extension:install` (`MishkaCmsCore.Install.Extensions`): the installer's registry says
-  which extensions have a seed, in which order, and which an operator switched off. `categories/0`
-  reads it; no list of extensions is kept here.
+  Every seed is a plugin on `dev:seed` (`event/0`), the core's own included, and subscribing is
+  declaring, as it is for `installer:extension:install` (`MishkaCmsCore.Install.Extensions`): the
+  installer's registry says which seeds exist, in which order, and which an operator switched off.
+  `categories/0` reads it; no list of seeds is kept here.
+
+  The core's seed is `MishkaCmsCore.Dev.CoreSeed`: `required: true` in its `extra`, so it is listed
+  first and run whatever was chosen. A required seed runs once, before the others, and is fired with
+  `site_id: nil`, `users: []` and the run's `opts` (`run_all/2`); what it appends to `reports` is the
+  foundation map (`%{sites:, users: %{master:, tenant:}}`) every other seed is then fired with, once
+  per site. An extension's seed looks like this:
 
       defmodule MyExtension.Plugins.DevSeed do
         use MishkaInstaller.Event.Hook,
@@ -94,7 +99,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
   is supervised by its extension like any other, so a build without the extension has no seed for
   it and no link to it.
 
-  The event is fired once per chosen extension and site, with:
+  An extension's seed is fired once per chosen extension and site, with:
 
       %{
         key: "my_extension",        # the plugin's OTP app; a plugin ignores any other key
@@ -398,9 +403,10 @@ defmodule MishkaCmsCore.Dev.Seeds do
   def event, do: @event
 
   @typedoc """
-  One extension seed the installer's dev step can offer. `key` is the plugin's OTP app as a string:
-  what `steps/1` and `run/2` are given back, the phase of its progress, and what the plugin matches
-  on. `nav` is the links its `extra` names, as `{label, path}`.
+  One seed the installer's dev step can offer. `key` is the plugin's OTP app as a string: what
+  `steps/1` and `run/2` are given back, the phase of its progress, and what the plugin matches on.
+  `nav` is the links its `extra` names, as `{label, path}`. `required` is the `required: true` of
+  its `extra`: the core's own seed (`MishkaCmsCore.Dev.CoreSeed`), which always runs.
   """
   @type category :: %{
           key: String.t(),
@@ -409,22 +415,29 @@ defmodule MishkaCmsCore.Dev.Seeds do
           label: String.t(),
           summary: String.t(),
           priority: integer(),
-          nav: [{String.t(), String.t()}]
+          nav: [{String.t(), String.t()}],
+          required: boolean()
         }
 
   @doc """
-  The extension seeds the installer's dev step can layer on top of the core foundation: every plugin
-  registered on `dev:seed` that is running, in priority order. A plugin an operator switched off, or
-  one held by a dependency, is left out, since nothing would reach it. The core data (sites, users,
-  permissions, components, …) is always seeded by `run/2`, so it is not listed here.
+  The seeds the installer's dev step offers: every plugin registered on `dev:seed` that is running,
+  the required ones first and then in priority order. A plugin an operator switched off, or one held
+  by a dependency, is left out, since nothing would reach it. The core's own seed is one of them,
+  required, so it is always there and always run.
   """
   @spec categories() :: [category()]
-  def categories, do: @event |> Extensions.offered() |> Enum.map(&category/1)
+  def categories do
+    @event
+    |> Extensions.offered()
+    |> Enum.map(&category/1)
+    |> Enum.sort_by(&(not &1.required))
+  end
 
   defp category(entry) do
     entry
     |> Map.take([:key, :app, :plugin, :label, :summary, :priority])
     |> Map.put(:nav, nav_links(entry.extra))
+    |> Map.put(:required, Map.get(entry.extra, :required) == true)
   end
 
   defp nav_links(extra) do
@@ -432,44 +445,37 @@ defmodule MishkaCmsCore.Dev.Seeds do
   end
 
   @doc """
-  The ordered seed phases for `selected`, as `{id, label}` — one progress row per phase (the installer
-  renders these as a live checklist). Always starts with `:core`, which installs every UI-kit
-  component too; then each selected category's `key`, in `categories/0`'s order. `selected` holds
-  keys, as strings or atoms.
+  The ordered seed phases for `selected`, as `{key, label}` — one progress row per phase (the
+  installer renders these as a live checklist): every required seed, then each selected one, in
+  `categories/0`'s order. `selected` holds keys, as strings or atoms; a required seed is in the list
+  whether it was selected or not.
   """
-  @spec steps([String.t() | atom()]) :: [{atom() | String.t(), String.t()}]
-  def steps(selected) do
-    extensions = selected |> chosen() |> Enum.map(&{&1.key, &1.label})
-
-    [{:core, gettext_noop("Seeding core data (sites, users, permissions, UI kits, content)")}] ++
-      extensions
-  end
+  @spec steps([String.t() | atom()]) :: [{String.t(), String.t()}]
+  def steps(selected), do: selected |> chosen() |> Enum.map(&{&1.key, &1.label})
 
   @doc """
-  Runs the dev seed for local development: the core foundation, every UI-kit component and the
-  content (always), plus — when chosen — the extension seeds, each fired on `dev:seed` once per site
-  with `size: :dev`. For DEV ONLY — never in production. `progress` is called with
-  `{phase, status, detail}` so the installer can show a live checklist; an extension's phase is its
-  `key`. Returns the core foundation map.
+  Runs the dev seed for local development: every required seed once (the core's own: sites, users,
+  permissions, UI kits and content), then each chosen extension's seed once per site, all fired on
+  `dev:seed` with `size: :dev`. For DEV ONLY — never in production. `progress` is called with
+  `{key, status, detail}` so the installer can show a live checklist. Returns the foundation map the
+  core's seed reported.
   """
   @spec run([String.t() | atom()], (term() -> any())) :: map()
   def run(selected \\ [], progress \\ fn _ -> :ok end) do
     prune_ancestors_to_pids()
 
-    progress.({:core, :running, nil})
-    core = dev_seed(progress)
-    progress.({:core, :done, nil})
-
-    seed_extensions(core, chosen(selected), :dev, progress)
+    selected
+    |> chosen()
+    |> seed!(:dev, [], progress)
   end
 
   @doc """
   Every seed this build has, for a script such as the host's `priv/repo/dev_seeds.exs`.
 
   `run_all(:dev)` is `run/2` with every category of `categories/0` chosen. `run_all(:stress, opts)`
-  runs `stress_seed/1` with `opts`, then every extension's seed on each stress site with
-  `size: :stress`. `opts` may also carry `progress:`, called as in `run/2`. For DEV ONLY. Returns the
-  core foundation map.
+  hands `opts` to the core's seed, which runs `stress_seed/1` with them, then runs every extension's
+  seed on each stress site with `size: :stress`. `opts` may also carry `progress:`, called as in
+  `run/2`. For DEV ONLY. Returns the foundation map.
   """
   @spec run_all(:dev | :stress, keyword()) :: map()
   def run_all(size \\ :dev, opts \\ [])
@@ -480,46 +486,83 @@ defmodule MishkaCmsCore.Dev.Seeds do
   def run_all(:stress, opts) do
     prune_ancestors_to_pids()
 
-    opts
-    |> stress_seed()
-    |> seed_extensions(categories(), :stress, Keyword.get(opts, :progress, fn _ -> :ok end))
+    {progress, stress_opts} = Keyword.pop(opts, :progress, fn _ -> :ok end)
+    seed!(categories(), :stress, stress_opts, progress)
   end
 
   defp chosen(selected) do
     keys = Enum.map(selected, &to_string/1)
-    Enum.filter(categories(), &(&1.key in keys))
+    Enum.filter(categories(), &(&1.required or &1.key in keys))
   end
 
-  defp seed_extensions(core, categories, size, progress) do
-    Enum.each(categories, fn %{key: key} ->
-      progress.({key, :running, nil})
-      line = fn text -> progress.({key, :log, text}) end
+  # A REQUIRED SEED RUNS ONCE, and the first one's report is the foundation (`%{sites:, users:}`)
+  # every other seed is fired with, once per site. Its payload carries `opts` beside the per-site
+  # keys, which are empty since there is no site yet.
+  defp seed!(categories, size, opts, progress) do
+    {required, per_site} = Enum.split_with(categories, & &1.required)
 
-      Enum.each(core.sites, fn site ->
-        payload = %{
-          key: key,
-          site_id: site.id,
-          users: core.users.master ++ Map.get(core.users.tenant, site.id, []),
+    case Enum.map(required, &seed_once!(&1, size, opts, progress)) do
+      [core | _] ->
+        Enum.each(per_site, &seed_sites!(&1, core, size, progress))
+        core
+
+      [] ->
+        raise "no required dev:seed plugin is running, so there are no sites to seed"
+    end
+  end
+
+  defp seed_once!(category, size, opts, progress) do
+    phase(category, progress, fn line ->
+      fire!(
+        %{
+          key: category.key,
+          site_id: nil,
+          users: [],
           size: size,
           progress: line,
-          reports: []
-        }
-
-        @event
-        |> Hook.call(payload, cannot_run: :cannot_run, raised: :raised)
-        |> seeded!(key, site)
-      end)
-
-      progress.({key, :done, nil})
+          reports: [],
+          opts: opts
+        },
+        ""
+      )
     end)
-
-    core
   end
 
-  defp seeded!(%{reports: [_ | _]}, _key, _site), do: :ok
+  defp seed_sites!(category, core, size, progress) do
+    phase(category, progress, fn line ->
+      Enum.each(core.sites, fn site ->
+        fire!(
+          %{
+            key: category.key,
+            site_id: site.id,
+            users: core.users.master ++ Map.get(core.users.tenant, site.id, []),
+            size: size,
+            progress: line,
+            reports: []
+          },
+          " on #{site.name}"
+        )
+      end)
+    end)
+  end
 
-  defp seeded!(answer, key, site),
-    do: raise("the #{key} seed did not run on #{site.name}: #{refusal(answer)}")
+  defp phase(%{key: key}, progress, run) do
+    progress.({key, :running, nil})
+    result = run.(fn text -> progress.({key, :log, text}) end)
+    progress.({key, :done, nil})
+    result
+  end
+
+  defp fire!(payload, where) do
+    @event
+    |> Hook.call(payload, cannot_run: :cannot_run, raised: :raised)
+    |> report!(payload.key, where)
+  end
+
+  defp report!(%{reports: [report | _]}, _key, _where), do: report
+
+  defp report!(answer, key, where),
+    do: raise("the #{key} seed did not run#{where}: #{refusal(answer)}")
 
   defp refusal(:cannot_run), do: "its plugin is not loaded"
   defp refusal(:raised), do: "its plugin raised, see the log"

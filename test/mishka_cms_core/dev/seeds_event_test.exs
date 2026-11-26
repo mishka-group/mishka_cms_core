@@ -4,8 +4,9 @@
 
 defmodule MishkaCmsCore.Dev.SeedsEventTest do
   @moduledoc """
-  An extension's dev seed is a plugin on `dev:seed`: registering it is what puts it in the
-  installer's dev step, and running the seeds fires it once per site with that site's users.
+  Every dev seed is a plugin on `dev:seed`: registering it is what puts it in the installer's dev
+  step. The core's own seed is one of them, required: listed first, always run, once, and its report
+  is the sites and users every extension's seed is then fired with, once per site.
 
   The stress run is the one exercised end to end here, at one or two sites: it reaches the event
   through the same path as the dev run without installing every UI kit first.
@@ -51,15 +52,15 @@ defmodule MishkaCmsCore.Dev.SeedsEventTest do
   end
 
   describe "categories/0" do
-    test "is empty when no extension registered a seed" do
-      assert Seeds.categories() == []
-      assert [{:core, _label}] = Seeds.steps([:mishka_seed_probe])
+    test "lists the core's own seed alone, required, when no extension registered one" do
+      assert [%{key: "mishka_cms_core", label: "Mishka CMS", required: true}] = Seeds.categories()
     end
 
-    test "lists a registered seed with its label, summary and links" do
+    test "lists a registered seed with its label, summary and links, after the core's" do
       register_probe!()
 
-      assert [category] = Seeds.categories()
+      assert [%{key: "mishka_cms_core"}, category] = Seeds.categories()
+      refute category.required
       assert category.key == "mishka_seed_probe"
       assert category.label == "Seed probe"
       assert category.summary == "Probe records"
@@ -74,7 +75,17 @@ defmodule MishkaCmsCore.Dev.SeedsEventTest do
         priority: 10
       })
 
-      assert Enum.map(Seeds.categories(), & &1.key) == ["mishka_seed_second", "mishka_seed_probe"]
+      assert Enum.map(Seeds.categories(), & &1.key) ==
+               ["mishka_cms_core", "mishka_seed_second", "mishka_seed_probe"]
+    end
+
+    test "keeps the required seed first beside an extension at the same priority" do
+      register_probe!(%{
+        priority: 0,
+        extra: [%{label: "A probe that sorts first", summary: "", required: false}]
+      })
+
+      assert Enum.map(Seeds.categories(), & &1.key) == ["mishka_cms_core", "mishka_seed_probe"]
     end
 
     test "leaves out a seed an operator switched off" do
@@ -85,7 +96,7 @@ defmodule MishkaCmsCore.Dev.SeedsEventTest do
         status: :stopped
       })
 
-      assert Enum.map(Seeds.categories(), & &1.key) == ["mishka_seed_probe"]
+      assert Enum.map(Seeds.categories(), & &1.key) == ["mishka_cms_core", "mishka_seed_probe"]
     end
 
     test "names the links of the registered seeds in every dev site's header" do
@@ -100,19 +111,29 @@ defmodule MishkaCmsCore.Dev.SeedsEventTest do
     test "adds a phase for each chosen seed, by key as a string or an atom" do
       register_probe!()
 
-      assert [{:core, _}, {"mishka_seed_probe", "Seed probe"}] = Seeds.steps([:mishka_seed_probe])
-      assert [{:core, _}, {"mishka_seed_probe", _}] = Seeds.steps(["mishka_seed_probe"])
-      assert [{:core, _}] = Seeds.steps([])
+      assert [{"mishka_cms_core", "Mishka CMS"}, {"mishka_seed_probe", "Seed probe"}] =
+               Seeds.steps([:mishka_seed_probe])
+
+      assert [{"mishka_cms_core", _}, {"mishka_seed_probe", _}] =
+               Seeds.steps(["mishka_seed_probe"])
+    end
+
+    test "keeps the required seed in a selection that left it out" do
+      register_probe!()
+
+      assert [{"mishka_cms_core", _}] = Seeds.steps([])
+      assert [{"mishka_cms_core", _}] = Seeds.steps(["mishka_not_installed"])
     end
   end
 
   describe "run_all(:stress, opts)" do
-    test "fires the seed once per site with that site's users and reports its progress" do
+    test "runs the core's seed once with the opts, then each extension's per site" do
       register_probe!()
       test = self()
 
       core = Seeds.run_all(:stress, [progress: &send(test, {:progress, &1})] ++ @tiny)
 
+      assert length(core.sites) == 2, "the core's seed was not given the run's opts"
       assert [master] = core.users.master
 
       for site <- core.sites do
@@ -128,8 +149,13 @@ defmodule MishkaCmsCore.Dev.SeedsEventTest do
       end
 
       refute_received {:dev_seed, _}
-      assert_received {:progress, {"mishka_seed_probe", :running, nil}}
-      assert_received {:progress, {"mishka_seed_probe", :done, nil}}
+
+      assert phases() == [
+               {"mishka_cms_core", :running},
+               {"mishka_cms_core", :done},
+               {"mishka_seed_probe", :running},
+               {"mishka_seed_probe", :done}
+             ]
     end
 
     test "raises when the seed's plugin raised" do
@@ -153,6 +179,20 @@ defmodule MishkaCmsCore.Dev.SeedsEventTest do
                    fn ->
                      Seeds.run_all(:stress, Keyword.put(@tiny, :sites, 1))
                    end
+    end
+  end
+
+  # The phases a run reported, in the order it reported them. The run is over and every message it
+  # sent is already in this process's mailbox, so nothing is waited for.
+  defp phases do
+    receive do
+      {:progress, {key, status, _detail}} when status in [:running, :done] ->
+        [{key, status} | phases()]
+
+      {:progress, _log} ->
+        phases()
+    after
+      0 -> []
     end
   end
 end
