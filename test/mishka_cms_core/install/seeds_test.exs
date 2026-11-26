@@ -183,7 +183,8 @@ defmodule MishkaCmsCore.Install.SeedsTest do
       assert Seeds.nav() == [%{label: "Probe", path: "/probe"}, %{label: "Store", to: "/store"}]
 
       assert [%{label: "Dev", children: children}] = DevSeeds.nav("localhost")
-      assert Enum.take(children, -2) == Seeds.nav()
+      assert {_, links} = Enum.split(children, length(children) - 2)
+      assert links == Seeds.nav()
 
       html = StarterContent.nav_links(DevSeeds.nav("localhost"))
       assert html =~ ~s|navigate="/store"|
@@ -388,7 +389,9 @@ defmodule MishkaCmsCore.Install.SeedsTest do
         |> MishkaCmsCore.Install.Bootstrap.steps()
         |> Enum.map(&elem(&1, 0))
 
-      assert Enum.take(rows, -3) == [
+      assert {_, last} = Enum.split(rows, length(rows) - 3)
+
+      assert last == [
                {"mishka_seed_probe", "locked"},
                {"mishka_cms_core", "compile"},
                {"mishka_cms_core", "finalize"}
