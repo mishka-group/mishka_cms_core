@@ -59,11 +59,19 @@ defmodule MishkaCmsCore.Test.Installer do
   @doc """
   Registers `module` as a started plugin of `event` and rebuilds the event, for the length of the
   calling test.
+
+  `attrs` overrides the record's own fields, the way a plugin's `initial:` and its OTP app would:
+  `%{extension: :my_app, priority: 10, extra: [%{label: "Mine"}], status: :stopped}`.
   """
-  @spec register!(module(), String.t()) :: :ok
-  def register!(module, event) do
-    {:ok, _} =
-      Event.write(%{name: module, event: event, extension: :mishka_installer, status: :started})
+  @spec register!(module(), String.t(), map()) :: :ok
+  def register!(module, event, attrs \\ %{}) do
+    record =
+      Map.merge(
+        %{name: module, event: event, extension: :mishka_installer, status: :started},
+        attrs
+      )
+
+    {:ok, _} = Event.write(record)
 
     :ok = EventHandler.do_compile(event, :start, false)
 

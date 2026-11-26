@@ -87,7 +87,8 @@ defmodule MishkaCmsCore.Install.Extensions do
 
   @typedoc """
   One extension that can install itself. `key` is the OTP app as a string, which is what
-  `install/4` is given back and what a plugin matches on.
+  `install/4` is given back and what a plugin matches on. `extra` is the plugin's own `:extra` map,
+  for the keys an event defines beyond `label`, `summary` and `fields`.
   """
   @type entry :: %{
           key: String.t(),
@@ -96,6 +97,7 @@ defmodule MishkaCmsCore.Install.Extensions do
           label: String.t(),
           summary: String.t(),
           fields: [map()],
+          extra: map(),
           status: atom(),
           priority: integer()
         }
@@ -111,17 +113,31 @@ defmodule MishkaCmsCore.Install.Extensions do
   why something is missing from it.
   """
   @spec installable() :: [entry()]
-  def installable do
+  def installable, do: registered(@event)
+
+  @doc """
+  Every plugin registered against `event`, whatever its status, read as an `t:entry/0` and in the
+  order they are offered.
+
+  Any event whose plugins declare themselves the way this one's do (an `:extra` with a `label` and a
+  `summary`) is read with it, so a second list of who subscribed is never kept by hand.
+  `MishkaCmsCore.Dev.Seeds.categories/0` reads `dev:seed` through it.
+  """
+  @spec registered(String.t()) :: [entry()]
+  def registered(event) do
     :event
-    |> Event.get(@event)
+    |> Event.get(event)
     |> List.wrap()
     |> Enum.map(&entry/1)
     |> Enum.sort_by(&{&1.priority, &1.label})
   end
 
-  @doc "The extensions a picker should draw — `installable/0` without the ones nothing would reach."
-  @spec offered() :: [entry()]
-  def offered, do: Enum.filter(installable(), &(&1.status in @offerable))
+  @doc """
+  The plugins of `event` a picker should draw: `registered/1` without the ones nothing would reach.
+  `event` defaults to `installer:extension:install`, so `offered/0` is `installable/0` filtered.
+  """
+  @spec offered(String.t()) :: [entry()]
+  def offered(event \\ @event), do: Enum.filter(registered(event), &(&1.status in @offerable))
 
   @doc """
   Asks the extension named by `key` to install itself onto `site_id`, and returns what it did.
@@ -335,6 +351,7 @@ defmodule MishkaCmsCore.Install.Extensions do
       label: field(extra, :label) || humanise(app),
       summary: field(extra, :summary) || "",
       fields: extra |> field(:fields) |> List.wrap(),
+      extra: extra,
       status: Map.get(record, :status),
       priority: Map.get(record, :priority) || 100
     }
