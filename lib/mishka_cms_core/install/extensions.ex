@@ -43,6 +43,19 @@ defmodule MishkaCmsCore.Install.Extensions do
   `%{name:, label:, type:, required?:}` for one that does — the installer draws them and hands the
   answers back in `install/4`.
 
+  `nav` is the links a site's visitors reach the extension by, `[%{label:, path:}]` (a path behind
+  the page's language) or `[%{label:, to:}]` (a literal path, for pages that answer no language),
+  each label a `gettext_noop` of `MishkaCmsCore.Gettext`:
+
+      extra: [%{label: "Blog", summary: "…", fields: [], nav: [%{label: gettext_noop("Blog"), path: "/blog"}]}]
+
+  The first install of the extension on a site adds them to the site's header menu
+  (`MishkaCmsCore.Install.StarterContent.add_nav_link/2`), whether the installer, the dev seeds or
+  a dashboard's Set up button asked: once, never over a link the header already has, and never
+  again on a later run, so a link the owner removed in the header editor stays removed. The dev
+  sites' `Dev` dropdown lists them too (`MishkaCmsCore.Install.Seeds.nav/0`), so the two never
+  disagree.
+
   ## Installing
 
   `install/4` fires the event once. Every subscribed plugin sees it and ignores a `key` that is not
@@ -73,6 +86,7 @@ defmodule MishkaCmsCore.Install.Extensions do
 
   require Logger
 
+  alias MishkaCmsCore.Install.StarterContent
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Event
@@ -98,10 +112,14 @@ defmodule MishkaCmsCore.Install.Extensions do
           label: String.t(),
           summary: String.t(),
           fields: [map()],
+          nav: [nav_link()],
           extra: [map()],
           status: atom(),
           priority: integer()
         }
+
+  @typedoc "A link of an extension's `nav`; see the moduledoc."
+  @type nav_link :: %{label: String.t(), path: String.t()} | %{label: String.t(), to: String.t()}
 
   @doc "The event an extension subscribes to in order to be installable."
   @spec event() :: String.t()
@@ -151,6 +169,8 @@ defmodule MishkaCmsCore.Install.Extensions do
   @spec install(String.t(), String.t() | atom(), map(), map() | nil) ::
           {:ok, PageProvision.report() | map()} | {:error, term()}
   def install(site_id, key, answers \\ %{}, actor \\ nil) when is_binary(site_id) do
+    first? = not installed?(site_id, key)
+
     payload = %{
       site_id: site_id,
       key: to_string(key),
@@ -175,6 +195,7 @@ defmodule MishkaCmsCore.Install.Extensions do
         # what it is — not set up — so its menu goes on offering to finish rather than opening a
         # dashboard onto pages that are not there.
         mark_installed!(site_id, key, Map.get(report, :version), actor)
+        if first?, do: add_nav(site_id, to_string(key))
 
         {:ok, report}
 
@@ -189,6 +210,36 @@ defmodule MishkaCmsCore.Install.Extensions do
         {:error, {:several_plugins_answered, length(many)}}
     end
   end
+
+  # THE FIRST INSTALL ON A SITE PUTS THE EXTENSION IN ITS HEADER MENU, and only the first: a later
+  # run finds the site set up and leaves the header as its owner has it.
+  defp add_nav(site_id, key) do
+    for %{key: ^key, nav: nav} <- installable(),
+        link <- nav,
+        do: StarterContent.add_nav_link(site_id, link)
+  end
+
+  @doc """
+  The links in `nav`, an `:extra`'s `nav` as it was registered: each `%{label:, path:}` or
+  `%{label:, to:}`, with any other entry left out.
+  """
+  @spec nav(term()) :: [nav_link()]
+  def nav(nav), do: nav |> List.wrap() |> Enum.flat_map(&nav_link/1)
+
+  defp nav_link(link) when is_map(link) do
+    case {field(link, :label), field(link, :path), field(link, :to)} do
+      {label, path, _to} when is_binary(label) and is_binary(path) ->
+        [%{label: label, path: path}]
+
+      {label, nil, to} when is_binary(label) and is_binary(to) ->
+        [%{label: label, to: to}]
+
+      _not_a_link ->
+        []
+    end
+  end
+
+  defp nav_link(_link), do: []
 
   @doc """
   The settings an extension's `settings:register` plugin should add so its own tab carries both of
@@ -353,6 +404,7 @@ defmodule MishkaCmsCore.Install.Extensions do
       label: field(extra, :label) || humanise(app),
       summary: field(extra, :summary) || "",
       fields: extra |> field(:fields) |> List.wrap(),
+      nav: extra |> field(:nav) |> nav(),
       extra: extras,
       status: Map.get(record, :status),
       priority: Map.get(record, :priority) || 100

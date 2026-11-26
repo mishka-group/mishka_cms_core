@@ -34,7 +34,7 @@ defmodule MishkaCmsCore.Install.Seeds do
                 summary: "Sample records on every dev site",
                 envs: [:dev],
                 default: true,
-                nav: [%{label: "Mine", path: "/mine"}, %{label: "Store", to: "/store"}]
+                nav: [%{label: "Sample mine", path: "/samples/mine"}]
               }
             ]
           }
@@ -76,7 +76,10 @@ defmodule MishkaCmsCore.Install.Seeds do
     * `default: true` starts ticked and can be unticked; `false` (the default) starts unticked.
     * `nav` is the links the part's pages are reached by, added to every dev site's `Dev` header
       dropdown (`nav/0`): `%{label:, path:}` is stored under the site's `/:lang`, `%{label:, to:}`
-      as the literal path, for a page that answers no language.
+      as the literal path, for a page that answers no language. The links of the extension itself
+      (Blog, Docs) are not a part's: its `installer:extension:install` plugin declares them once
+      (`MishkaCmsCore.Install.Extensions`), its first install adds them to a site's header and
+      `nav/0` lists them in the `Dev` dropdown as well.
 
   An extension's "pages" part goes through `MishkaCmsCore.Install.Extensions.install/4`, so
   `installer:extension:install` still does the writing and the site is recorded as set up
@@ -136,7 +139,7 @@ defmodule MishkaCmsCore.Install.Seeds do
   @type env :: :dev | :prod
 
   @typedoc "A link a part's pages are reached by; see the moduledoc."
-  @type nav_link :: %{label: String.t(), path: String.t()} | %{label: String.t(), to: String.t()}
+  @type nav_link :: Extensions.nav_link()
 
   @typedoc "One part of a plugin, read from its `extra`; see the moduledoc."
   @type part :: %{
@@ -208,12 +211,18 @@ defmodule MishkaCmsCore.Install.Seeds do
   end
 
   @doc """
-  The `nav` of every `:dev` part, in the order the parts run, for the `Dev` dropdown of every dev
-  site's header.
+  The links of every plugin with a `:dev` part, in the order the parts run, for the `Dev` dropdown
+  of every dev site's header: the extension's own `nav` (what its `installer:extension:install`
+  plugin declares, `MishkaCmsCore.Install.Extensions`, and its first install adds to a site's
+  header), then the `nav` of each of its `:dev` parts.
   """
   @spec nav() :: [nav_link()]
   def nav do
-    for plugin <- plugins(:dev), part <- plugin.parts, link <- part.nav, do: link
+    installed = Map.new(Extensions.installable(), &{&1.key, &1.nav})
+
+    for plugin <- plugins(:dev),
+        link <- Map.get(installed, plugin.key, []) ++ Enum.flat_map(plugin.parts, & &1.nav),
+        do: link
   end
 
   @doc """
@@ -444,7 +453,7 @@ defmodule MishkaCmsCore.Install.Seeds do
             envs: envs(field(extra, :envs)),
             required: required,
             default: required or field(extra, :default) == true,
-            nav: extra |> field(:nav) |> List.wrap() |> Enum.flat_map(&nav_link/1)
+            nav: extra |> field(:nav) |> Extensions.nav()
           }
         ]
 
@@ -461,21 +470,6 @@ defmodule MishkaCmsCore.Install.Seeds do
   defp env(env) when env in [:dev, "dev"], do: [:dev]
   defp env(env) when env in [:prod, "prod"], do: [:prod]
   defp env(_unknown), do: []
-
-  defp nav_link(link) when is_map(link) do
-    case {field(link, :label), field(link, :path), field(link, :to)} do
-      {label, path, _to} when is_binary(label) and is_binary(path) ->
-        [%{label: label, path: path}]
-
-      {label, nil, to} when is_binary(label) and is_binary(to) ->
-        [%{label: label, to: to}]
-
-      _not_a_link ->
-        []
-    end
-  end
-
-  defp nav_link(_link), do: []
 
   defp field(map, key), do: Map.get(map, key) || Map.get(map, to_string(key))
 end

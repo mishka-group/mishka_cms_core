@@ -218,6 +218,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     Translation
   }
 
+  alias MishkaCmsCore.Install.Extensions
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
 
@@ -1554,6 +1555,118 @@ defmodule MishkaCmsCore.Install.StarterContent do
       {entry, _index} ->
         entry |> nav_target() |> nav_link()
     end)
+  end
+
+  @doc """
+  Adds `link` to the header menu of `site_id`, as an admin adding it in the header editor would:
+  the starter layout's `site-header` call gets one more link (`nav_links/1`'s markup) after the
+  links it holds, and nothing else of the layout changes. `link` is `%{label:, path:}` (a path
+  behind the page's language) or `%{label:, to:}` (a literal path); its label is translated into
+  the site's primary language (`MishkaCmsCore.Gettext`).
+
+  It adds a link once: a header that already links the same path, in any form (behind the
+  language, as a literal path with or without a language in front, a full address on any host, in
+  a dropdown), is `:held` and left as it is. A site whose layout has no `site-header` call (the
+  owner replaced the starter's) is `:no_header`. One read, and one write when it adds.
+  `MishkaCmsCore.Install.Extensions.install/4` calls it for the links an extension declares, the
+  first time the extension is set up on a site.
+  """
+  @spec add_nav_link(String.t(), Extensions.nav_link()) :: :added | :held | :no_header
+  def add_nav_link(site_id, %{label: label} = link) when is_binary(site_id) do
+    with %{template: template} = layout <- held_row(Layout, site_id, @layout_name),
+         {start, close} <- header_call(template) do
+      header = binary_part(template, start, close - start)
+
+      case nav_path(link) in header_paths(header) do
+        true -> :held
+        false -> write_nav_link(layout, template, close, translated(link, label, site_id))
+      end
+    else
+      _no_header -> :no_header
+    end
+  end
+
+  # Where the layout's `site-header` call starts and where its closing tag is. A call that closes
+  # itself (`/>`) has no links between tags, and the next `</.component>` is another call's.
+  defp header_call(template) do
+    with {start, _length} <- :binary.match(template, ~s(component_name="site-header")),
+         rest = binary_part(template, start, byte_size(template) - start),
+         {close, _length} <- :binary.match(rest, "</.component>"),
+         :nomatch <- :binary.match(binary_part(rest, 0, close), "<.component") do
+      {start, start + trim_back(rest, close)}
+    else
+      _no_header_call -> nil
+    end
+  end
+
+  # Before the closing tag's indentation, so the new link sits on its own line after the others.
+  defp trim_back(rest, at) do
+    head = binary_part(rest, 0, at)
+    byte_size(String.trim_trailing(head))
+  end
+
+  defp write_nav_link(layout, template, at, link) do
+    head = binary_part(template, 0, at)
+    tail = binary_part(template, at, byte_size(template) - at)
+
+    layout
+    |> Ash.Changeset.for_update(:update, %{template: head <> nav_links([link]) <> tail},
+      tenant: layout.site_id,
+      authorize?: false,
+      context: %{page_code: :package}
+    )
+    |> Ash.update!()
+
+    :added
+  end
+
+  defp translated(link, label, site_id) do
+    language = Languages.primary(site_id)
+
+    text =
+      Gettext.with_locale(MishkaCmsCore.Gettext, language, fn ->
+        Gettext.gettext(MishkaCmsCore.Gettext, label)
+      end)
+
+    %{link | label: text}
+  end
+
+  # THE PATHS A HEADER LINKS, each as the site path it opens: behind the language
+  # (`site_path("/:lang/blog", …)`), a literal `/blog` or `/en/blog`, or a full address.
+  @link_target ~r/(?:navigate|href|patch)=(?:"([^"]*)"|\{\s*site_path\(\s*"([^"]*)")/
+
+  defp header_paths(header) do
+    for [_whole | targets] <- Regex.scan(@link_target, header),
+        target = Enum.find(targets, &(&1 != "")),
+        is_binary(target),
+        do: site_link_path(target)
+  end
+
+  defp nav_path(%{path: path}), do: site_link_path(path)
+  defp nav_path(%{to: path}), do: site_link_path(path)
+
+  defp site_link_path(target) do
+    path = URI.parse(target).path || "/"
+
+    path
+    |> String.replace_prefix("/:lang", "")
+    |> without_language()
+    |> String.trim_trailing("/")
+    |> case do
+      "" -> "/"
+      path -> path
+    end
+  end
+
+  # `/en/blog` and `/pt-BR/blog` are `/blog`: the first segment is a language code.
+  defp without_language(path) do
+    case String.split(path, "/", parts: 3) do
+      ["", code, rest] when byte_size(code) in [2, 5] ->
+        if Regex.match?(~r/\A[a-z]{2}(-[A-Za-z]{2})?\z/, code), do: "/" <> rest, else: path
+
+      _other ->
+        path
+    end
   end
 
   defp nav_target({label, path}), do: {label, {:lang, path}}
