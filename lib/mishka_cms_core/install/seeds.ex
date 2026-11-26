@@ -167,8 +167,8 @@ defmodule MishkaCmsCore.Install.Seeds do
 
   @typedoc """
   What was chosen: each plugin's key and the ids of its parts that were ticked. A required part runs
-  whether it is listed or not. `nil` chooses what is ticked at the start: the required and default
-  parts.
+  whether it is listed or not. A plugin the map does not name, and every plugin when it is `nil`,
+  runs what is ticked at the start: its required and default parts.
   """
   @type picks :: %{optional(String.t()) => [String.t()]} | nil
 
@@ -286,10 +286,14 @@ defmodule MishkaCmsCore.Install.Seeds do
   end
 
   defp picked?(%{required: true}, _picks, _key), do: true
-  defp picked?(%{default: default}, nil, _key), do: default
+  defp picked?(part, nil, key), do: picked?(part, %{}, key)
 
-  defp picked?(%{id: id}, picks, key),
-    do: id in (picks |> Map.get(key, []) |> List.wrap() |> Enum.map(&to_string/1))
+  defp picked?(%{id: id, default: default}, picks, key) do
+    case Map.fetch(picks, key) do
+      {:ok, ids} -> id in Enum.map(List.wrap(ids), &to_string/1)
+      :error -> default
+    end
+  end
 
   defp run_once(plugins, run) do
     plugins

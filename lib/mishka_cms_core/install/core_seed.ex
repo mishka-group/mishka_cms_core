@@ -105,8 +105,16 @@ defmodule MishkaCmsCore.Install.CoreSeed do
     }
 
   alias MishkaCmsCore.Dev.Seeds, as: DevSeeds
+  alias MishkaCmsCore.Install.Bootstrap
 
   @impl true
+  def call(%{key: "mishka_cms_core", env: :prod, part: part} = payload),
+    do:
+      reply(
+        payload,
+        Bootstrap.run_part(part, payload.answers, payload.foundation, payload.progress)
+      )
+
   def call(%{key: "mishka_cms_core", env: :dev, part: part} = payload),
     do: reply(payload, DevSeeds.run_part(part, payload))
 
@@ -114,4 +122,7 @@ defmodule MishkaCmsCore.Install.CoreSeed do
 
   defp reply(payload, {:ok, report}),
     do: {:reply, %{payload | reports: payload.reports ++ [report]}}
+
+  defp reply(payload, {:error, reason}),
+    do: {:reply, %{payload | reports: payload.reports ++ [%{error: reason}]}}
 end

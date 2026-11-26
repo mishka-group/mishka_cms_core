@@ -307,6 +307,95 @@ defmodule MishkaCmsCore.Install.SeedsTest do
     end
   end
 
+  # THE PRODUCTION INSTALL IS A RUN OF THE SAME EVENT: the core's production parts with the forms'
+  # answers, then each chosen production part of every other plugin, on the site the core made.
+  describe "a production install (Bootstrap.run/2)" do
+    setup do
+      :persistent_term.erase(:mishka_installed)
+      dir = Path.join(System.tmp_dir!(), "seeds_media_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      Application.put_env(:mishka_cms_core, :media_static_dir, dir)
+
+      on_exit(fn ->
+        :persistent_term.erase(:mishka_installed)
+        Application.delete_env(:mishka_cms_core, :media_static_dir)
+        File.rm_rf(dir)
+      end)
+
+      register_probe!()
+      :ok
+    end
+
+    @params %{
+      email: "owner@example.com",
+      password: "Password123!",
+      site_name: "My CMS",
+      host: "example.com"
+    }
+
+    test "runs a plugin's chosen production parts on the new site, never a dev-only one" do
+      test = self()
+
+      params =
+        Map.merge(@params, %{
+          parts: %{"mishka_seed_probe" => ["pages", "samples"]},
+          answers: %{"mishka_seed_probe" => %{"answer" => "42"}}
+        })
+
+      assert {:ok, %{site: site, user: user}} =
+               MishkaCmsCore.Install.Bootstrap.run(params, &send(test, {:progress, &1}))
+
+      assert_received {:seed, %{part: "pages"} = payload}
+      assert payload.site_id == site.id
+      assert payload.env == :prod
+      assert payload.parts == ["pages", "locked"]
+      assert payload.answers == %{"answer" => "42"}
+      assert Enum.map(payload.users, & &1.id) == [user.id]
+
+      assert_received {:seed, %{part: "locked"}}
+      refute_received {:seed, %{part: "samples"}}
+
+      rows = phases() |> Enum.filter(&(elem(&1, 1) == :done)) |> Enum.map(&elem(&1, 0))
+
+      assert rows == [
+               {"mishka_cms_core", "permissions"},
+               {"mishka_cms_core", "master_user"},
+               {"mishka_cms_core", "site"},
+               {"mishka_cms_core", "languages"},
+               {"mishka_cms_core", "settings"},
+               {"mishka_cms_core", "components"},
+               {"mishka_cms_core", "starter_content"},
+               {"mishka_cms_core", "auth_pages"},
+               {"mishka_seed_probe", "pages"},
+               {"mishka_seed_probe", "locked"},
+               {"mishka_cms_core", "compile"},
+               {"mishka_cms_core", "finalize"}
+             ]
+
+      assert MishkaCmsCore.Install.installed?()
+    end
+
+    test "never hands a plugin the master password in the clear" do
+      assert {:ok, _install} = MishkaCmsCore.Install.Bootstrap.run(@params)
+
+      assert_received {:seed, payload}
+      refute inspect(payload) =~ "Password123!"
+    end
+
+    test "lists the chosen parts, then the compile and the flag" do
+      rows =
+        %{"mishka_seed_probe" => []}
+        |> MishkaCmsCore.Install.Bootstrap.steps()
+        |> Enum.map(&elem(&1, 0))
+
+      assert Enum.take(rows, -3) == [
+               {"mishka_seed_probe", "locked"},
+               {"mishka_cms_core", "compile"},
+               {"mishka_cms_core", "finalize"}
+             ]
+    end
+  end
+
   # The rows a run reported, in the order it reported them. The run is over and every message it
   # sent is already in this process's mailbox, so nothing is waited for.
   defp phases do
