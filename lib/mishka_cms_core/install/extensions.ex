@@ -87,8 +87,9 @@ defmodule MishkaCmsCore.Install.Extensions do
 
   @typedoc """
   One extension that can install itself. `key` is the OTP app as a string, which is what
-  `install/4` is given back and what a plugin matches on. `extra` is the plugin's own `:extra` map,
-  for the keys an event defines beyond `label`, `summary` and `fields`.
+  `install/4` is given back and what a plugin matches on. `label`, `summary` and `fields` come from
+  the first map of the plugin's `:extra`; `extra` is the whole list, for an event whose plugins
+  declare more than one map (`MishkaCmsCore.Install.Seeds` reads its parts from it).
   """
   @type entry :: %{
           key: String.t(),
@@ -97,7 +98,7 @@ defmodule MishkaCmsCore.Install.Extensions do
           label: String.t(),
           summary: String.t(),
           fields: [map()],
-          extra: map(),
+          extra: [map()],
           status: atom(),
           priority: integer()
         }
@@ -119,9 +120,9 @@ defmodule MishkaCmsCore.Install.Extensions do
   Every plugin registered against `event`, whatever its status, read as an `t:entry/0` and in the
   order they are offered.
 
-  Any event whose plugins declare themselves the way this one's do (an `:extra` with a `label` and a
-  `summary`) is read with it, so a second list of who subscribed is never kept by hand.
-  `MishkaCmsCore.Dev.Seeds.categories/0` reads `dev:seed` through it.
+  Any event whose plugins declare themselves in an `:extra` is read with it, so a second list of who
+  subscribed is never kept by hand. `MishkaCmsCore.Install.Seeds.plugins/1` reads `installer:seed`
+  through it.
   """
   @spec registered(String.t()) :: [entry()]
   def registered(event) do
@@ -341,7 +342,8 @@ defmodule MishkaCmsCore.Install.Extensions do
   end
 
   defp entry(record) do
-    extra = record |> Map.get(:extra) |> List.wrap() |> List.first() || %{}
+    extras = record |> Map.get(:extra) |> List.wrap()
+    extra = List.first(extras) || %{}
     app = Map.get(record, :extension)
 
     %{
@@ -351,7 +353,7 @@ defmodule MishkaCmsCore.Install.Extensions do
       label: field(extra, :label) || humanise(app),
       summary: field(extra, :summary) || "",
       fields: extra |> field(:fields) |> List.wrap(),
-      extra: extra,
+      extra: extras,
       status: Map.get(record, :status),
       priority: Map.get(record, :priority) || 100
     }
@@ -364,11 +366,14 @@ defmodule MishkaCmsCore.Install.Extensions do
 
   defp field(_extra, _key), do: nil
 
-  # A LABEL IS NOT REQUIRED. An extension that registers without one is still installable, and
-  # `mishka_blog` reads better in a list than a blank.
-  defp humanise(nil), do: gettext("Unnamed extension")
+  @doc """
+  The name an extension is shown under when its plugin declares no label: `mishka_blog` is "Blog".
+  A label is not required, and an app name reads better in a list than a blank.
+  """
+  @spec humanise(atom() | String.t() | nil) :: String.t()
+  def humanise(nil), do: gettext("Unnamed extension")
 
-  defp humanise(app) do
+  def humanise(app) do
     app
     |> to_string()
     |> String.replace_prefix("mishka_", "")
