@@ -180,12 +180,6 @@ defmodule MishkaCmsCore.Dev.Seeds do
     </div>|
                                )
 
-  # STILL HERE ONLY so the blog's and the documentation's plugins, which subscribe through it, compile
-  # until they move to `MishkaCmsCore.Install.Seeds.event/0`. Delete it with them.
-  @doc false
-  @spec event() :: String.t()
-  def event, do: Seeds.event()
-
   @doc """
   Writes the core's `part` (`MishkaCmsCore.Install.CoreSeed`) for the dev installer, and returns its
   report, which `MishkaCmsCore.Install.Seeds` merges into the foundation the next part is handed.
