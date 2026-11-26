@@ -60,7 +60,7 @@ msgid_plural "%{count} components"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:308
+#: lib/mishka_cms_core/install/bootstrap.ex:333
 #, elixir-autogen, elixir-format
 msgid "%{count} component installed"
 msgid_plural "%{count} components installed"
@@ -233,16 +233,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/page_provision.ex:371
 #, elixir-autogen, elixir-format
 msgid "%{joined} and %{next}"
-msgstr ""
-
-#: lib/mishka_cms_core/install/bootstrap.ex:374
-#, elixir-autogen, elixir-format
-msgid "%{key}: %{permissions} permissions, %{pages} pages, %{components} components"
-msgstr ""
-
-#: lib/mishka_cms_core/install/bootstrap.ex:388
-#, elixir-autogen, elixir-format
-msgid "%{key}: could not be installed — the logs say why"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/kit_upgrade_panel.ex:529
@@ -469,14 +459,14 @@ msgstr ""
 msgid "%{name}: %{message}"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:329
+#: lib/mishka_cms_core/install/bootstrap.ex:353
 #, elixir-autogen, elixir-format
 msgid "%{pages} page, %{components} components"
 msgid_plural "%{pages} pages, %{components} components"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:349
+#: lib/mishka_cms_core/install/bootstrap.ex:372
 #, elixir-autogen, elixir-format
 msgid "%{pages} sign-in pages, %{translations} translated words"
 msgstr ""
@@ -954,7 +944,7 @@ msgstr ""
 msgid "Active but the module is not loaded yet — compile pending."
 msgstr ""
 
-#: lib/mishka_cms_core/install/extensions.ex:223
+#: lib/mishka_cms_core/install/extensions.ex:240
 #, elixir-autogen, elixir-format
 msgid "Active on this site"
 msgstr ""
@@ -1018,12 +1008,12 @@ msgstr ""
 msgid "Added it to %{form}. The empty form was removed."
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:148
+#: lib/mishka_cms_core/install/core_seed.ex:91
 #, elixir-autogen, elixir-format
 msgid "Adding sign-in pages"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:147
+#: lib/mishka_cms_core/install/core_seed.ex:84
 #, elixir-autogen, elixir-format
 msgid "Adding starter content"
 msgstr ""
@@ -1137,7 +1127,7 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:145
+#: lib/mishka_cms_core/install/core_seed.ex:70
 #, elixir-autogen, elixir-format
 msgid "Applying essential settings"
 msgstr ""
@@ -1267,7 +1257,7 @@ msgstr ""
 msgid "Black"
 msgstr ""
 
-#: lib/mishka_cms_core/install/extensions.ex:213
+#: lib/mishka_cms_core/install/extensions.ex:230
 #, elixir-autogen, elixir-format
 msgid "Blank until this site has been set up. Written by the installer, not by hand."
 msgstr ""
@@ -1642,7 +1632,7 @@ msgstr ""
 msgid "Compiling"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:150
+#: lib/mishka_cms_core/install/bootstrap.ex:143
 #, elixir-autogen, elixir-format
 msgid "Compiling the site runtime"
 msgstr ""
@@ -1860,37 +1850,32 @@ msgstr ""
 msgid "Created under another name"
 msgstr ""
 
-#: lib/mishka_cms_core/dev/seeds.ex:221
-#, elixir-autogen, elixir-format
-msgid "Creating per-site content (theme, components, layout, pages, media)…"
-msgstr ""
-
-#: lib/mishka_cms_core/dev/seeds.ex:184
+#: lib/mishka_cms_core/dev/seeds.ex:202
 #, elixir-autogen, elixir-format
 msgid "Creating permissions…"
 msgstr ""
 
-#: lib/mishka_cms_core/dev/seeds.ex:188
+#: lib/mishka_cms_core/dev/seeds.ex:222
 #, elixir-autogen, elixir-format
 msgid "Creating sites…"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:143
+#: lib/mishka_cms_core/install/core_seed.ex:56
 #, elixir-autogen, elixir-format
 msgid "Creating the first site"
 msgstr ""
 
-#: lib/mishka_cms_core/dev/seeds.ex:217
+#: lib/mishka_cms_core/dev/seeds.ex:299
 #, elixir-autogen, elixir-format
 msgid "Creating the global layout & hooks…"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:142
+#: lib/mishka_cms_core/install/core_seed.ex:49
 #, elixir-autogen, elixir-format
 msgid "Creating the master admin"
 msgstr ""
 
-#: lib/mishka_cms_core/dev/seeds.ex:193
+#: lib/mishka_cms_core/dev/seeds.ex:288
 #, elixir-autogen, elixir-format
 msgid "Creating users…"
 msgstr ""
@@ -2406,7 +2391,7 @@ msgstr ""
 msgid "Fill in the form, then open the editor"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:151
+#: lib/mishka_cms_core/install/bootstrap.ex:144
 #, elixir-autogen, elixir-format
 msgid "Finishing up"
 msgstr ""
@@ -2765,21 +2750,16 @@ msgstr ""
 msgid "Install it on this site"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:295
+#: lib/mishka_cms_core/install/bootstrap.ex:321
 #, elixir-autogen, elixir-format
 msgid "Installing %{count} component…"
 msgid_plural "Installing %{count} components…"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:146
+#: lib/mishka_cms_core/install/core_seed.ex:77
 #, elixir-autogen, elixir-format
 msgid "Installing UI components"
-msgstr ""
-
-#: lib/mishka_cms_core/install/bootstrap.ex:149
-#, elixir-autogen, elixir-format
-msgid "Installing the extensions you chose"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/extension_installer_panel.ex:735
@@ -3806,7 +3786,7 @@ msgstr ""
 msgid "Off"
 msgstr ""
 
-#: lib/mishka_cms_core/install/extensions.ex:225
+#: lib/mishka_cms_core/install/extensions.ex:242
 #, elixir-autogen, elixir-format
 msgid "Off hides this extension's menu and stops its pages being served here. Nothing is deleted — switch it back on and everything returns."
 msgstr ""
@@ -4199,7 +4179,7 @@ msgstr ""
 msgid "Preferences"
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:141
+#: lib/mishka_cms_core/install/core_seed.ex:42
 #, elixir-autogen, elixir-format
 msgid "Preparing permissions"
 msgstr ""
@@ -4661,7 +4641,7 @@ msgstr ""
 msgid "Saved."
 msgstr ""
 
-#: lib/mishka_cms_core/install/bootstrap.ex:144
+#: lib/mishka_cms_core/install/core_seed.ex:63
 #, elixir-autogen, elixir-format
 msgid "Saving the site's languages"
 msgstr ""
@@ -4783,7 +4763,7 @@ msgstr ""
 msgid "Set up again"
 msgstr ""
 
-#: lib/mishka_cms_core/install/extensions.ex:211
+#: lib/mishka_cms_core/install/extensions.ex:228
 #, elixir-autogen, elixir-format
 msgid "Set up at version"
 msgstr ""
@@ -5895,7 +5875,7 @@ msgstr ""
 msgid "Unknown"
 msgstr ""
 
-#: lib/mishka_cms_core/install/extensions.ex:352
+#: lib/mishka_cms_core/install/extensions.ex:374
 #, elixir-autogen, elixir-format
 msgid "Unnamed extension"
 msgstr ""
@@ -8469,7 +8449,7 @@ msgstr ""
 msgid "Send the addresses that moved — old pages, old files — to where they are now."
 msgstr ""
 
-#: lib/mishka_cms_core/dev/seeds.ex:409
+#: lib/mishka_cms_core/dev/seeds.ex:426
 #, elixir-autogen, elixir-format
 msgid "%{label} (%{tag}) could not be downloaded: %{reason}"
 msgstr ""
@@ -8529,7 +8509,7 @@ msgstr ""
 msgid "GitHub answered HTTP %{status}"
 msgstr ""
 
-#: lib/mishka_cms_core/dev/seeds.ex:214
+#: lib/mishka_cms_core/dev/seeds.ex:244
 #, elixir-autogen, elixir-format
 msgid "Installing every UI-kit component — the sample pages are built from them…"
 msgstr ""
@@ -8608,11 +8588,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:1215
 #, elixir-autogen, elixir-format
 msgid "Saving…"
-msgstr ""
-
-#: lib/mishka_cms_core/dev/seeds.ex:364
-#, elixir-autogen, elixir-format
-msgid "Seeding core data (sites, users, permissions, UI kits, content)"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:55
@@ -20628,4 +20603,94 @@ msgstr ""
 #: lib/mishka_cms_core/install/doctor_checks.ex:257
 #, elixir-autogen, elixir-format
 msgid "You are not allowed to run this repair."
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:98
+#, elixir-autogen, elixir-format
+msgid "Adding sample data"
+msgstr ""
+
+#: lib/mishka_cms_core/dev/seeds.ex:209
+#, elixir-autogen, elixir-format
+msgid "Creating master@example.com…"
+msgstr ""
+
+#: lib/mishka_cms_core/dev/seeds.ex:303
+#, elixir-autogen, elixir-format
+msgid "Creating per-site content (pages, drafts, hooks)…"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:43
+#, elixir-autogen, elixir-format
+msgid "Every permission name an admin can be granted"
+msgstr ""
+
+#: lib/mishka_cms_core/install/seeds.ex:424
+#, elixir-autogen, elixir-format
+msgid "Mishka CMS"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:100
+#, elixir-autogen, elixir-format
+msgid "More sites, users, media, showcase pages and hooks on every dev site"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:78
+#, elixir-autogen, elixir-format
+msgid "The UI-kit components the pages are built from"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:50
+#, elixir-autogen, elixir-format
+msgid "The account that holds every site"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:64
+#, elixir-autogen, elixir-format
+msgid "The languages its pages answer in"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:92
+#, elixir-autogen, elixir-format
+msgid "The pages a visitor signs in and registers on"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:57
+#, elixir-autogen, elixir-format
+msgid "The site on the domain you typed"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:71
+#, elixir-autogen, elixir-format
+msgid "The site title and the outgoing email address"
+msgstr ""
+
+#: lib/mishka_cms_core/install/core_seed.ex:85
+#, elixir-autogen, elixir-format
+msgid "The theme, header, footer, layout and home page"
+msgstr ""
+
+#: lib/mishka_cms_core/install/seeds.ex:398
+#, elixir-autogen, elixir-format
+msgid "its plugin did not hand the payload back"
+msgstr ""
+
+#: lib/mishka_cms_core/install/seeds.ex:396
+#, elixir-autogen, elixir-format
+msgid "its plugin is not loaded"
+msgstr ""
+
+#: lib/mishka_cms_core/install/seeds.ex:397
+#, elixir-autogen, elixir-format
+msgid "its plugin raised, the log says why"
+msgstr ""
+
+#: lib/mishka_cms_core/install/seeds.ex:395
+#, elixir-autogen, elixir-format
+msgid "no plugin answered to it"
+msgstr ""
+
+#: lib/mishka_cms_core/install/seeds.ex:401
+#, elixir-autogen, elixir-format
+msgid "sample data is never loaded in a production build"
 msgstr ""
