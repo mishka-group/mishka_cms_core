@@ -224,10 +224,18 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   def run(params, progress \\ fn _ -> :ok end) do
     answers = params |> Map.get(:answers, %{}) |> Map.put(Seeds.core_key(), core_answers(params))
 
-    with {:ok, foundation} <-
-           Seeds.run(:prod, Map.get(params, :parts), answers: answers, progress: progress) do
-      finish(foundation.site, progress)
-      {:ok, %{user: foundation.user, site: foundation.site}}
+    case Seeds.run(:prod, Map.get(params, :parts), answers: answers, progress: progress) do
+      {:ok, %{site: site, user: user}} ->
+        finish(site, progress)
+        {:ok, %{user: user, site: site}}
+
+      # NO SITE AND NO MASTER means the core's own plugin is not running, and an install that wrote
+      # neither must not be flagged as done.
+      {:ok, _foundation} ->
+        {:error, :core_parts_not_running}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
