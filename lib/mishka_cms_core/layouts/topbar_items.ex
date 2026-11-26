@@ -37,12 +37,12 @@ defmodule MishkaCmsCore.Layouts.TopbarItems do
   `current_path` and `view` as assigns, so a LiveComponent keeps its own state (an open list, a
   search query) and loads its own data.
 
-      defmodule MyExtension.SiteSwitcher do
+      defmodule MyExtension.TopbarItems do
         use MishkaInstaller.Event.Hook, event: "topbar:items"
 
         @impl true
         def call(%{items: items, current_user: %{site_id: nil}} = data) do
-          item = %{id: "site-switcher", priority: 10, module: MyExtension.SiteSwitcher.Combo}
+          item = %{id: "my-extension-live", priority: 10, module: MyExtension.LiveToggle}
           {:reply, %{data | items: items ++ [item]}}
         end
 

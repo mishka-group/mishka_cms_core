@@ -41,6 +41,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
   """
 
   use MishkaCmsCore.ExtensionLiveView
+
+  on_mount MishkaCmsCore.Accounts.AdminSite
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers

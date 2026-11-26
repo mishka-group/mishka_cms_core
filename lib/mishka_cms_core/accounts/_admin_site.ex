@@ -25,9 +25,16 @@ defmodule MishkaCmsCore.Accounts.AdminSite do
 
   The page also gets `:admin_site`: `"all"` (`all/0`) or the id of the site it shows.
 
-  A pick made on one page reaches every other open admin page of the same master on `topic/1`,
-  and those pages mount again where they are (`push_navigate/2`, `replace: true`), live and without
-  reloading the browser's page.
+  A master the hook hands a page as one site's admin is still a master (`master?/1`): the hook marks
+  them with Ash metadata, so `chosen/1` and `keep/2` read and write their pick as before, and the
+  top bar's switcher (`MishkaCmsCore.Layouts.SiteSwitcher`) is still drawn for them. An extension
+  whose pages work in a site of their own choosing (a record's, say) hands the page the master as
+  that site's admin with `acting/2`, the same mark and no query.
+
+  A pick made on one page reaches every other open admin page of the same master on `topic/1`, as
+  the message `{:admin_site_chosen, chosen}`, and those pages mount again where they are
+  (`push_navigate/2`, `replace: true`), live and without reloading the browser's page. A page with
+  a hook of its own hears the same message on the same topic and goes where it likes.
 
   Reading the pick runs no query: the preference comes from the settings cache and the site from
   `MishkaCmsCore.Runtime.States.SiteState`. A page with one site picked loads that site once, for
@@ -46,6 +53,7 @@ defmodule MishkaCmsCore.Accounts.AdminSite do
   @setting "admin.site"
   @all "all"
   @message :admin_site_chosen
+  @acting :admin_site_master
 
   @doc "The key of the master's own preference that holds the site they picked."
   @spec setting() :: String.t()
@@ -60,12 +68,35 @@ defmodule MishkaCmsCore.Accounts.AdminSite do
   def topic(user_id), do: "admin:site:#{user_id}"
 
   @doc """
+  Whether `user` is a master: a user with no site, or a master a page was handed as one site's
+  admin (`acting/2`, this hook). `false` for a site user and for nobody.
+  """
+  @spec master?(map() | nil) :: boolean()
+  def master?(%{__metadata__: %{@acting => true}}), do: true
+  def master?(%{site_id: nil, id: user_id}) when is_binary(user_id), do: true
+  def master?(_user), do: false
+
+  @doc """
+  `master` as the admin of the site `site_id`: `site_id` set, and marked as a master
+  (`master?/1`) so their pick stays theirs to read and change. No query; `site` is not loaded.
+  """
+  @spec acting(map(), String.t()) :: map()
+  def acting(master, site_id) when is_binary(site_id),
+    do: Ash.Resource.put_metadata(%{master | site_id: site_id}, @acting, true)
+
+  @doc """
   The site `user`'s admin pages show: a site user's own site; for a master, the active site they
   picked, else `"all"` (All sites, nothing picked, or a picked site that is gone or inactive);
   `nil` for nobody.
   """
   @spec chosen(map() | nil) :: String.t() | nil
-  def chosen(%{site_id: nil, id: user_id}) do
+  def chosen(user), do: chosen(master?(user), user)
+
+  defp chosen(true, %{id: user_id}), do: picked(user_id)
+  defp chosen(false, %{site_id: site_id}) when is_binary(site_id), do: site_id
+  defp chosen(false, _nobody), do: nil
+
+  defp picked(user_id) do
     case Settings.get_user(@setting, user_id) do
       site_id when is_binary(site_id) and site_id != @all ->
         (active?(site_id) && site_id) || @all
@@ -75,17 +106,15 @@ defmodule MishkaCmsCore.Accounts.AdminSite do
     end
   end
 
-  def chosen(%{site_id: site_id}) when is_binary(site_id), do: site_id
-  def chosen(_nobody), do: nil
-
   @doc """
   Keeps `chosen` (`"all"` or an active site's id) as what master `user` looks at, and tells their
   other open admin pages (`topic/1`). Anybody else, or any other value, is `{:error, :refused}`
   and nothing is written. One write.
   """
   @spec keep(map() | nil, String.t()) :: :ok | {:error, :refused}
-  def keep(%{site_id: nil, id: user_id}, chosen) when is_binary(chosen) do
-    with true <- chosen == @all or active?(chosen),
+  def keep(%{id: user_id} = user, chosen) when is_binary(chosen) do
+    with true <- master?(user),
+         true <- chosen == @all or active?(chosen),
          {:ok, _kept} <- Settings.put_user(@setting, chosen, user_id) do
       Phoenix.PubSub.broadcast_from(
         MishkaCmsCore.PubSub,
@@ -128,7 +157,7 @@ defmodule MishkaCmsCore.Accounts.AdminSite do
       |> Ash.Query.filter(id == ^site_id)
       |> Ash.read_one!(authorize?: false)
 
-    %{master | site_id: site_id, site: site}
+    %{acting(master, site_id) | site: site}
   end
 
   defp hear_picks(socket, master) do

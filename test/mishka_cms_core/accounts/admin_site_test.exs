@@ -81,12 +81,30 @@ defmodule MishkaCmsCore.Test.Accounts.AdminSiteTest do
     assert %{current_user: %{site_id: nil}} = mount(master)
   end
 
+  test "a master handed a page as one site's admin is still a master who may pick again", %{
+    master: master,
+    site_a: site_a,
+    site_b: site_b
+  } do
+    :ok = AdminSite.keep(master, site_a.id)
+    %{current_user: acting} = mount(master)
+
+    assert acting.site_id == site_a.id
+    assert AdminSite.master?(acting)
+    assert AdminSite.chosen(acting) == site_a.id
+
+    assert :ok = AdminSite.keep(acting, site_b.id)
+    assert AdminSite.chosen(master) == site_b.id
+    assert AdminSite.master?(AdminSite.acting(master, site_b.id))
+  end
+
   test "a site user keeps its own site and may not pick another", %{
     site_a: site_a,
     site_b: site_b
   } do
     admin = create_user!(site_id: site_a.id)
 
+    refute AdminSite.master?(admin)
     assert {:error, :refused} = AdminSite.keep(admin, site_b.id)
     assert AdminSite.chosen(admin) == site_a.id
     assert %{admin_site: picked, current_user: %{site_id: own}} = mount(admin)

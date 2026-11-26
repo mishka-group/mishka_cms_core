@@ -9,8 +9,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   `type`. The markup lives in the co-located `settings_live.html.heex`.
 
   Settings are multitenant (see `MishkaCmsCore.Runtime.Setting`). A **master** admin picks a scope —
-  "Global" (the value for every site) or a specific site — from the header; a **tenant** admin is
-  locked to their own site. Each setting declares a `scope`: `:global` settings are editable only in
+  "Global" (the value for every site) or a specific site — from the header, and opens on the site
+  they picked in the top bar (`MishkaCmsCore.Accounts.AdminSite`), else on Global; a **tenant**
+  admin is locked to their own site. Each setting declares a `scope`: `:global` settings are editable only in
   the Global view (shown read-only to a site), `:master` settings are Global-only and hidden from a
   site entirely, `:site` settings only in a site view, and `:both` (a global default a site may
   override) in either, and one declared `editable?: false` is read-only to everyone. A setting is
@@ -56,7 +57,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   """
   use MishkaCmsCore.ExtensionLiveView
 
-  alias MishkaCmsCore.Accounts.AuthGate
+  alias MishkaCmsCore.Accounts.{AdminSite, AuthGate}
   alias MishkaCmsCore.Captcha
   alias MishkaCmsCore.Captcha.Widget
   alias MishkaCmsCore.Mail
@@ -124,10 +125,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
      |> assign(panels: SettingsPanels.collect(user, categories))
      |> assign(security_cards: SecurityCards.collect())
      |> assign(scopes: scope_options(master?))
-     |> assign(active_scope: if(master?, do: nil, else: user.site_id))
+     |> assign(active_scope: first_scope(master?, user))
      |> assign(can_redraw_cards?: can_redraw_cards?(user))
      |> subscribe_settings()}
   end
+
+  # A master opens on the site they picked in the top bar (`AdminSite`), else on Global, and may
+  # switch scope from there; a tenant is on its own site for good.
+  defp first_scope(true, user) do
+    case AdminSite.chosen(user) do
+      "all" -> nil
+      site_id -> site_id
+    end
+  end
+
+  defp first_scope(false, user), do: user.site_id
 
   # `"setting:updated"` carries EVERY write — global rows and all sites' — so one subscription is the
   # whole feed and `reaches?/2` decides what this viewer may act on. The resource's per-site topic

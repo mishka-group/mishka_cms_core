@@ -14,6 +14,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Redirect.Index do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  on_mount MishkaCmsCore.Accounts.AdminSite
+
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.{Redirect, Redirects}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed

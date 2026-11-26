@@ -10,6 +10,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
   `error-page-form-modal`: two mounts of one form component on a page collide on their DOM id.
   """
   use MishkaCmsCore.ExtensionLiveView
+
+  on_mount MishkaCmsCore.Accounts.AdminSite
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
   alias MishkaCmsCore.Runtime.ErrorStatus
   alias MishkaCmsCore.Runtime.Authoring.Section
