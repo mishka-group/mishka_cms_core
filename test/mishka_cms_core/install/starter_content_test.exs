@@ -1031,16 +1031,17 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
     # THE PAGE BEING VIEWED TRAVELS AS A SIGNED `return_to`, so signing in from the header lands
     # back on it; the sign-in pages themselves carry none.
-    test "Sign in carries the page being viewed, signed, and nothing on the sign-in pages", %{
-      site: site
-    } do
+    test "Sign in carries the page being viewed, signed, and nothing on home or the sign-in pages",
+         %{
+           site: site
+         } do
       sign_in = sign_in_href(header_html(site, %{current_path: "/buy/x"}))
 
       assert %URI{path: "/auth", query: query} = URI.parse(sign_in)
       assert %{"return_to" => token} = URI.decode_query(query)
       assert MishkaCmsCoreWeb.ReturnTo.verify(MishkaCmsCore.TestEndpoint, token) == "/buy/x"
 
-      for path <- ["/auth", "/auth/sign-out", "/auth/register", nil] do
+      for path <- ["/", "/auth", "/auth/sign-out", "/auth/register", nil] do
         assert sign_in_href(header_html(site, %{current_path: path})) == "/auth",
                "Sign in on #{inspect(path)} carried a return_to"
       end

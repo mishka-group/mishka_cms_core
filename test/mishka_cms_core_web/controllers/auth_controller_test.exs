@@ -276,8 +276,8 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
       assert redirected_to(get(conn, handoff(user, %{"return_to" => token}))) == "/buy/x"
     end
 
-    test "a Sign in link carries nothing from the sign-in pages or off this site" do
-      for path <- ["/auth", "/auth/sign-out", "//evil.example", "https://evil.example", nil] do
+    test "a Sign in link carries nothing from home, the sign-in pages or off this site" do
+      for path <- ["/", "/auth", "/auth/sign-out", "//evil.example", "https://evil.example", nil] do
         assert ReturnTo.returning("/auth", path) == "/auth", "#{inspect(path)} was carried"
       end
 
