@@ -547,6 +547,12 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
              ]
     end
 
+    # A typed year goes stale on the first of January; the template reads the date it is drawn on.
+    test "the footer's year is the year it is drawn in, never one typed into it", %{site: site} do
+      assert footer_html(site) =~ "© #{Date.utc_today().year} ·"
+      refute component(site, "site-footer").template =~ ~r/©\s*\d{4}/
+    end
+
     test "prefix every language in prefix_all", %{site: site} do
       {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
 
