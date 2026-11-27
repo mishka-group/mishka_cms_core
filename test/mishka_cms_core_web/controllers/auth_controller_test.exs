@@ -110,11 +110,14 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
   describe "a sign-in asked for with a return_to" do
     @asked "/en/members?tab=2"
 
-    # EVERY WAY OF NOT NAMING A PAGE OF THIS SITE: a token whose signature was edited, one signed
-    # too long ago, one signed under another salt, one signed with another application's secret, one
-    # this very application signed over somewhere else — which `sign/2` would refuse to mint but a
-    # leaked or older one could be — and then the plain addresses that lead off this site or are no
-    # path at all.
+    # EVERY WAY OF NOT BEING A TOKEN THIS APPLICATION SIGNED FOR A PAGE OF ITS OWN: one whose
+    # signature was edited, one signed too long ago, one signed under another salt, one signed with
+    # another application's secret, one this very application signed over somewhere else — which
+    # `sign/2` would refuse to mint but a leaked or older one could be — and then the plain
+    # addresses that used to be taken at their word, `@asked` itself included: it is a real page
+    # here, and being local is no longer what earns a redirect. `/%2F/evil.example` and
+    # `/%5Cevil.example` are here rather than among the paths `sign/2` refuses, because they are
+    # pages of this site and it signs them — a browser reads neither escape as another origin.
     defp forgeries do
       # An edit inside the SIGNATURE, not at the front of the token: the token opens with the fixed
       # `SFMyNTY` header, and an edit there is turned away for naming an algorithm nothing offers,
@@ -137,14 +140,15 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
           @asked
         ),
         Phoenix.Token.sign(@endpoint, "return_to", "//evil.example"),
+        @asked,
+        "/en/members",
         "https://evil.example/en/members",
-        "http:/evil.example",
         "//evil.example",
         "///evil.example",
         "/\\evil.example",
-        "/\tevil.example",
+        "/%2F/evil.example",
+        "/%5Cevil.example",
         "/%09/evil.example",
-        " /en/members",
         "javascript:alert(1)",
         "en/members",
         ""
@@ -158,20 +162,8 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
       assert redirected_to(get(conn, handoff)) == @asked
     end
 
-    # A LINK OR A PERSON WRITES THE PATH IN THE CLEAR: `/auth?return_to=/buy/product-d`. The escaped
-    # ones are pages of this site too — a browser reads neither escape as another origin.
-    test "comes back to a plain path of this site once signed in", %{conn: conn, site: site} do
-      user = register_user("plain-path@example.com", site.id)
-
-      for path <- [@asked, "/buy/product-d", "/", "/%2F/evil.example", "/%5Cevil.example"] do
-        handoff = handoff(user, %{"return_to" => path})
-
-        assert redirected_to(get(conn, handoff)) == path
-      end
-    end
-
     # The handoff is a GET anyone can retype, so the forgeries are put on it directly.
-    test "goes home rather than off this site or anywhere a signature does not vouch for", %{
+    test "goes home rather than anywhere a signature does not vouch for", %{
       conn: conn,
       site: site
     } do
@@ -217,26 +209,19 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
       |> redirected_to()
     end
 
-    test "is followed on a magic-link sign-in only to a page of this site", %{
-      conn: conn,
-      site: site
-    } do
+    test "is followed on a magic-link sign-in only when it was signed", %{conn: conn, site: site} do
       vouched = register_user("magic-vouched@example.com", site.id)
-      plain = register_user("magic-plain@example.com", site.id)
       forged = register_user("magic-forged@example.com", site.id)
 
       assert magic_sign_in(conn, vouched, signed(@asked)) == @asked
-      assert magic_sign_in(conn, plain, @asked) == @asked
       assert magic_sign_in(conn, forged, "//evil.example") == "/"
     end
 
-    test "is followed on a password reset only to a page of this site", %{conn: conn, site: site} do
+    test "is followed on a password reset only when it was signed", %{conn: conn, site: site} do
       vouched = register_user("reset-vouched@example.com", site.id)
-      plain = register_user("reset-plain@example.com", site.id)
       forged = register_user("reset-forged@example.com", site.id)
 
       assert password_reset(conn, vouched, signed(@asked)) == @asked
-      assert password_reset(conn, plain, @asked) == @asked
       assert password_reset(conn, forged, "https://evil.example/en/members") == "/"
     end
 
@@ -299,8 +284,6 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
 
     defp signs?(address), do: signed(address) != nil
 
-    defp follows?(address), do: ReturnTo.verify(@endpoint, address) != nil
-
     # Whether `Phoenix.Controller.redirect/2` hands the address out or raises on it. A conn of its
     # own each time, because a redirect is a response already sent.
     defp redirects?(address) do
@@ -315,8 +298,7 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
     # `Phoenix.Controller.redirect/2` will hand out, and one it refuses has to be one redirect
     # refuses too. A Phoenix that grows that list fails here, instead of where a visitor would meet
     # it — as a 500 on the redirect that was meant to take them back to the page they asked for.
-    # A plain path is held to the same line.
-    test "signs and follows an address exactly when a redirect would hand it out" do
+    test "signs an address exactly when a redirect would hand it out" do
       addresses =
         for byte <- 0..255,
             character = <<byte>>,
@@ -326,7 +308,6 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
 
       for address <- addresses ++ ["", "/", "//x", "///x", "a", "/a?b=c"] do
         assert signs?(address) == redirects?(address), "disagreed over #{inspect(address)}"
-        assert follows?(address) == redirects?(address), "disagreed over #{inspect(address)}"
       end
     end
   end

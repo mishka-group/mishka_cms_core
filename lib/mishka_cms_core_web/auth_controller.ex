@@ -30,8 +30,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
   ## Success Flow
 
   Authentication success triggers:
-  1. **Return Path Resolution**: Follows `return_to`, a path of this site or a token signed for one
-     (`MishkaCmsCoreWeb.ReturnTo`), or defaults to home
+  1. **Return Path Resolution**: Verifies the signed `return_to` token, or defaults to home
   2. **Session Management**: Stores user authentication state
   3. **User Assignment**: Sets current user in connection assigns
   4. **Activity Messaging**: Displays appropriate success message
@@ -83,8 +82,8 @@ defmodule MishkaCmsCoreWeb.AuthController do
 
   - **Session Security**: Proper session invalidation prevents session hijacking
   - **CSRF Protection**: Integration with Phoenix CSRF protection
-  - **Secure Redirects**: Only a path of this site is redirected to, so a `return_to` anyone writes
-    into the URL cannot open-redirect
+  - **Secure Redirects**: Only a path this application signed is redirected to, so a `return_to`
+    anyone writes into the URL cannot open-redirect
   - **Error Information**: Limited error details prevent user enumeration
   - **Rate Limiting**: Signing in and the reset and sign-in link requests are limited per address and
     per account; a refused one is answered `429` with a page saying how long to wait — see
@@ -289,8 +288,9 @@ defmodule MishkaCmsCoreWeb.AuthController do
           |> then(&Hook.call("AuthController.Success.BeforeAuth", &1))
           |> Map.get(:conn)
 
-        # SOMEWHERE ON THIS SITE, OR NOWHERE. `return_to` is a path of this site or a token
-        # `MishkaCmsCoreWeb.ReturnTo` signed for one; anything else goes home.
+        # SOMEWHERE ON THIS SITE, OR NOWHERE. `return_to` is a token `MishkaCmsCoreWeb.ReturnTo`
+        # signed over a path the router matched, so nothing anyone writes into the URL is followed:
+        # whatever does not verify goes home.
         return_to = ReturnTo.verify(conn, conn.params["return_to"]) || path(conn, "/")
 
         {activity_type, message} =

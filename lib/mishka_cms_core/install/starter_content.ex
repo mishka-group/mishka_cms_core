@@ -3792,7 +3792,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     ''')
   end
 
-  # ONLY A PATH OF THIS SITE, as typed or signed; another origin never reaches a form action.
+  # ONLY A TOKEN THIS APPLICATION SIGNED; a stranger's string never reaches a form action.
   defp auth_helper("return_params") do
     helper("return_params", "assigns", ~S'''
     endpoint = Application.fetch_env!(:mishka_cms_core, :endpoint)

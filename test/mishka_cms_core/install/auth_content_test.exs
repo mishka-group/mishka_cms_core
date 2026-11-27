@@ -207,9 +207,9 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
       assert page_html(module, site, "en") =~ ~s(href="/en/auth/register")
     end
 
-    # A PATH OF THIS SITE IS CARRIED ON, signed or plain, into the links and the form action; an
-    # address off this site is dropped at the door.
-    test "a return_to of this site travels on, and any other is dropped", %{site: site} do
+    # A TOKEN THIS APPLICATION SIGNED IS CARRIED ON, into the links and the form action; a stranger's
+    # string is dropped at the door.
+    test "a verified return_to travels on, and any other is dropped", %{site: site} do
       StarterContent.ensure_auth!(site)
       module = compiled!(page_at(site, "/:lang/auth"), site, "Page")
       token = ReturnTo.sign(MishkaCmsCore.TestEndpoint, "/en/members")
@@ -220,15 +220,9 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
       assert carried =~ ~s(href="/auth/register?#{query}")
       assert carried =~ "sign_in?#{query}"
 
-      plain = page_html(module, site, "en", %{"return_to" => "/buy/product-d"})
+      dropped = page_html(module, site, "en", %{"return_to" => "https://evil.example"})
 
-      assert plain =~ "sign_in?#{URI.encode_query(%{"return_to" => "/buy/product-d"})}"
-
-      for elsewhere <- ["https://evil.example", "//evil.example", "/\\evil.example"] do
-        dropped = page_html(module, site, "en", %{"return_to" => elsewhere})
-
-        refute dropped =~ "return_to", "#{elsewhere} travelled on"
-      end
+      refute dropped =~ "return_to"
     end
 
     test "a second run writes nothing", %{site: site} do

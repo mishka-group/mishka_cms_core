@@ -4,25 +4,20 @@
 
 defmodule MishkaCmsCoreWeb.ReturnTo do
   @moduledoc """
-  Where a sign-in goes back to: a path of this site, as typed or as a token this application signed.
+  Where a sign-in goes back to, as a token this application signed.
 
   A page that sends a visitor to `/auth` with the address to come back to puts that address in the
   URL, and it then travels through the sign-in and register form actions and through the
   `sign_in_with_token` handoff before `MishkaCmsCoreWeb.AuthController` redirects to it. Everything
-  on that road is writable by whoever is walking it, so a `return_to` that may name another origin
-  would make `/auth` the front door of a phishing site.
+  on that road is writable by whoever is walking it, so a `return_to` taken at its word would make
+  `/auth` the front door of a phishing site.
 
-  `return_to` comes in two shapes, and both end on a page of this site or nowhere:
-
-    * a plain path, `?return_to=/buy/product-d`, the way a link or a person writes it. It is
-      followed only when it is one `Phoenix.Controller.redirect/2` hands out as a local path: a
-      single leading `/` and none of the characters a browser strips or reinterprets, so
-      `//evil.example`, `https://evil.example`, `/\\evil.example` and `javascript:` are refused;
-    * a `Phoenix.Token` that `sign/2` made over such a path, which an extension hands out when the
-      address comes from a request and should not be read in the clear. It expires after fifteen
-      minutes and is refused when tampered with or signed with another secret or salt.
-
-  `verify/2` hands back the path, or `nil`, and the caller sends whoever has no path home.
+  Nothing here parses what arrives. `sign/2` takes a path the router itself matched — built with
+  `~p`, never assembled from a parameter — and returns a `Phoenix.Token`; `verify/2` hands that
+  exact path back, and hands back nothing for a token that was tampered with, signed with another
+  secret or salt, signed too long ago, or never a token at all. A plain path is never a token, so
+  `?return_to=/en/members` and `?return_to=https://evil.example` are refused alike, and the caller
+  sends whoever cannot be verified home.
   """
 
   @salt "return_to"
@@ -31,8 +26,8 @@ defmodule MishkaCmsCoreWeb.ReturnTo do
   # copied out of is no use to whoever they paste it to.
   @max_age 900
 
-  # WHAT `Phoenix.Controller.redirect/2` REFUSES TO HAND OUT: with these turned away, no token and
-  # no plain path can ever verify into a value that redirect raises on. The first five are what a
+  # WHAT `Phoenix.Controller.redirect/2` REFUSES TO HAND OUT: with these turned away at signing
+  # time, no token can ever verify into a value that redirect raises on. The first five are what a
   # browser's URL parser strips or reinterprets, which `Phoenix.URL` turns away; the null byte is
   # what `Plug.Conn.put_resp_header/3` turns away, since the address becomes a `location` header.
   # Both are lists this application does not own, so `MishkaCmsCoreWeb.Test.AuthControllerTest`
@@ -63,14 +58,9 @@ defmodule MishkaCmsCoreWeb.ReturnTo do
   def sign(_context, _path), do: nil
 
   @doc """
-  Gives back the path a `return_to` names, or `nil`.
-
-  A plain path comes back as it is when it is a path of this site. A token comes back as the path
-  it was signed for, and `nil` when it cannot be verified.
+  Gives back the path a token was signed for, or `nil` when it cannot be verified.
   """
   @spec verify(context(), term()) :: String.t() | nil
-  def verify(_context, "/" <> _here = path), do: if(same_site?(path), do: path)
-
   def verify(context, token) when is_binary(token) do
     case Phoenix.Token.verify(context, @salt, token, max_age: @max_age) do
       {:ok, path} when is_binary(path) -> if same_site?(path), do: path
@@ -80,8 +70,11 @@ defmodule MishkaCmsCoreWeb.ReturnTo do
 
   def verify(_context, _token), do: nil
 
-  # A PATH OF THIS SITE: what `Phoenix.Controller.redirect/2` hands out as a local path, asked of a
-  # plain path and of a token's path alike.
+  # DEFENCE IN DEPTH RATHER THAN THE CHECK ITSELF: a path reaches `sign/2` from `~p`, which escapes
+  # or raises on all of this rather than build it, so this can only fail for a later caller that
+  # hands over something it did not build — and the signature, not this, is what keeps a stranger's
+  # string out. Asked again on the way back so that a token minted before this module refused such a
+  # value cannot be spent now.
   defp same_site?("//" <> _elsewhere), do: false
   defp same_site?("/" <> _here = path), do: not String.contains?(path, @reinterpreted)
   defp same_site?(_not_a_path), do: false
