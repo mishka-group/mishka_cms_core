@@ -8,8 +8,12 @@ defmodule MishkaCmsCore.Runtime.ThemeSourceTest do
   builder's canvas styles a block with): the site's `@theme` and the variants its compile declares,
   so a `dark:` class reads the page's `data-theme` as the published CSS does, not the author's
   system setting.
+
+  `async: false` — the site it makes is saved to `SiteState`, which is the node's: an async test's
+  site stays there after its rollback, and a later test that saves a site of the same name is
+  refused.
   """
-  use MishkaCmsCore.DataCase, async: true
+  use MishkaCmsCore.DataCase
 
   import MishkaCmsCore.Test.Factory
 
