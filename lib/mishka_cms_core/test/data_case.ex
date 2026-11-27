@@ -78,10 +78,17 @@ defmodule MishkaCmsCore.DataCase do
 
   A test in such a module sees what the tests before it wrote, so keep them to reading. Only for a
   module that is not async.
+
+  The connection is held until the module's last test ends, however long the module runs: the
+  repo's `:ownership_timeout` (two minutes by default) would otherwise take it back from a module
+  that runs longer on a busy machine, roll back what its setup wrote, and leave its later tests
+  reading nothing.
   """
   @spec module_sandbox() :: %{module_sandbox: pid()}
   def module_sandbox do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(@repo, shared: true)
+    pid =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(@repo, shared: true, ownership_timeout: :infinity)
+
     ExUnit.Callbacks.on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     unload_built_on_exit()
     %{module_sandbox: pid}
