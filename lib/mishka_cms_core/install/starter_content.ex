@@ -1066,7 +1066,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               </button>
               <.link
                 :if={!@current_user}
-                navigate={site_path("/:lang/auth", @lang)}
+                navigate={MishkaCmsCoreWeb.ReturnTo.returning(site_path("/:lang/auth", @lang), @current_path)}
                 class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg max-lg:flex-1 max-lg:justify-center dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
               >
                 Sign in
@@ -1220,6 +1220,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
           logo_attr(logo),
           lang_attr(),
           user_attr(),
+          path_attr(),
           editions_attr(),
           class_attr("Extra classes for the header itself")
         ],
@@ -1328,6 +1329,18 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "opts" => %{
         "default" => nil,
         "doc" => "`@current_user`, the signed-in visitor. Their menu takes the place of Sign in."
+      }
+    }
+  end
+
+  defp path_attr do
+    %{
+      "name" => "current_path",
+      "type" => "string",
+      "opts" => %{
+        "default" => nil,
+        "doc" =>
+          "`@current_path`, the page being viewed. Sign in carries it as a signed `return_to` (`MishkaCmsCoreWeb.ReturnTo.returning/2`), so the visitor lands back on it."
       }
     }
   end
@@ -1485,6 +1498,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         site="#{site_name}"
         lang={lang(assigns)}
         current_user={assigns[:current_user]}
+        current_path={assigns[:current_path]}
         editions={assigns[:page_languages] || []}
       >#{nav_links(nav)}
       </.component>

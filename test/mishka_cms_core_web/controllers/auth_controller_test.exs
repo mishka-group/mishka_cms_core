@@ -265,6 +265,26 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
              )
     end
 
+    # THE HEADER'S SIGN IN LINK (`ReturnTo.returning/2`): the page it sits on, signed, is where the
+    # sign-in lands.
+    test "comes back to the page a Sign in link was on", %{conn: conn, site: site} do
+      user = register_user("header-sign-in@example.com", site.id)
+
+      %URI{path: "/auth", query: query} = URI.parse(ReturnTo.returning("/auth", "/buy/x"))
+      %{"return_to" => token} = URI.decode_query(query)
+
+      assert redirected_to(get(conn, handoff(user, %{"return_to" => token}))) == "/buy/x"
+    end
+
+    test "a Sign in link carries nothing from the sign-in pages or off this site" do
+      for path <- ["/auth", "/auth/sign-out", "//evil.example", "https://evil.example", nil] do
+        assert ReturnTo.returning("/auth", path) == "/auth", "#{inspect(path)} was carried"
+      end
+
+      assert ReturnTo.returning("/fa/auth", "/fa/auth/magic-link") == "/fa/auth"
+      assert ReturnTo.returning(nil, "/buy/x") == nil
+    end
+
     test "is not signed for anywhere but this site in the first place" do
       for elsewhere <- [
             "https://evil.example/en/members",

@@ -58,6 +58,30 @@ defmodule MishkaCmsCoreWeb.ReturnTo do
   def sign(_context, _path), do: nil
 
   @doc """
+  The sign-in address `sign_in` with `return_to` signed for `path`, the page a link to sign in sits
+  on, so the visitor lands back there once signed in:
+
+      <.link navigate={MishkaCmsCoreWeb.ReturnTo.returning(site_path("/:lang/auth", @lang), @current_path)}>
+
+  `sign_in` alone when `path` is not a path of this site, or is the sign-in page itself or a page
+  under it (`/auth/sign-out`), which there is nothing to come back to. The token is signed with the
+  endpoint `config :mishka_cms_core, :endpoint` names and lasts as long as any other.
+  """
+  @spec returning(String.t() | nil, term()) :: String.t() | nil
+  def returning(sign_in, path) when is_binary(sign_in) and is_binary(path) do
+    endpoint = Application.fetch_env!(:mishka_cms_core, :endpoint)
+
+    with false <- path == sign_in or String.starts_with?(path, sign_in <> "/"),
+         token when is_binary(token) <- sign(endpoint, path) do
+      sign_in <> "?" <> URI.encode_query(%{"return_to" => token})
+    else
+      _nothing_to_come_back_to -> sign_in
+    end
+  end
+
+  def returning(sign_in, _path), do: sign_in
+
+  @doc """
   Gives back the path a token was signed for, or `nil` when it cannot be verified.
   """
   @spec verify(context(), term()) :: String.t() | nil
