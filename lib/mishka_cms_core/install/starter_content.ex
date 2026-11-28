@@ -2394,10 +2394,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
       },
       %{
         name: "Auth password reset",
-        title: "Reset your password",
+        title: "Set your password",
         path: "/:lang/auth/password-reset/:token",
         role: "password_reset",
-        description: "Set a new password from the link in the reset email.",
+        description: "Set a password, first time or after a reset, from the link in an email.",
         template: password_reset_template(),
         events: [],
         helpers: @navigation ++ ~w(chevron_left_svg lock_alert_svg)
@@ -3332,8 +3332,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
       <span class="mb-4 flex size-[46px] items-center justify-center rounded-[14px] bg-[#fbf1df] text-[#a5691a]">
         <.lock_alert_svg />
       </span>
-      <h1 class="#{@title_class}">{t("Reset your password")}</h1>
-      <p class="#{@lede_class}">{t("Choose a new password for your account.")}</p>
+      <h1 class="#{@title_class}">{t("Set your password")}</h1>
+      <p class="#{@lede_class}">{t("Choose a password for your account.")}</p>
     </div>
     <div class="mt-6">
       <.live_component
@@ -4312,7 +4312,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "Send magic link" => "ارسال لینک جادویی",
       "If an account exists for that email, a magic sign-in link is on its way." =>
         "اگر حسابی با این ایمیل وجود داشته باشد، لینک ورود جادویی در راه است.",
-      "Choose a new password for your account." => "برای حسابتان رمز عبور تازه‌ای برگزینید.",
+      "Set your password" => "رمز عبورتان را تعیین کنید",
+      "Choose a password for your account." => "برای حسابتان رمز عبوری برگزینید.",
       "Confirm your account" => "تأیید حساب",
       "One more step to activate your account." => "یک گام دیگر تا فعال شدن حسابتان.",
       "Magic sign in" => "ورود جادویی",
