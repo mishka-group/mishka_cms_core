@@ -21,9 +21,12 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   Everything runs `authorize?: false` because no privileged actor exists yet — which is why
   this is reachable only while the CMS is uninstalled (`MishkaCms.Plugs.InstallGate`).
 
-  The install runs in ordered phases (`@steps`); the installer renders one progress row per entry,
-  so adding a phase here (with a matching `run_step/3` clause) makes it appear in the UI
-  automatically.
+  THE PHASES ARE PARTS on `installer:seed` (`MishkaCmsCore.Install.Seeds`): the core's own
+  (`MishkaCmsCore.Install.CoreSeed`, each one `run_part/4` here) in the order above, then the
+  chosen `:prod` parts of every other plugin on the new site, an extension's "pages" part through
+  `MishkaCmsCore.Install.Extensions.install/4`. The compile and the install flag come last, after
+  every part. The installer renders one progress row per entry of `steps/1`, so a part a plugin
+  declares appears in it without a line here.
 
   The master user is created via the existing `register_with_password` strategy action (which mints
   the token and hashes the password); with no tenant the user stays `site_id: nil` (a master), and
@@ -46,12 +49,9 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  require Logger
-
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
 
-  alias MishkaCmsCore.Install.Extensions
-  alias MishkaCmsCore.Install.StarterContent
+  alias MishkaCmsCore.Install.{Seeds, StarterContent}
   alias MishkaCmsCore.Runtime.Handlers.{BootHandler, UiKitHandler}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Site
@@ -68,8 +68,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
           optional(:languages) => [String.t()],
           optional(:language_urls) => String.t(),
           optional(:settings) => %{optional(String.t()) => term()},
-          optional(:extensions) => [String.t()],
-          optional(:extension_answers) => %{optional(String.t()) => map()}
+          optional(:parts) => Seeds.picks(),
+          optional(:answers) => %{optional(String.t()) => map()}
         }
 
   @permissions [
@@ -137,18 +137,11 @@ defmodule MishkaCmsCore.Install.Bootstrap do
      "Writing pages, layouts, components, error pages, stylesheets and JS hooks over the admin JSON:API, their code included."}
   ]
 
-  @steps [
-    {:permissions, gettext_noop("Preparing permissions")},
-    {:master_user, gettext_noop("Creating the master admin")},
-    {:site, gettext_noop("Creating the first site")},
-    {:languages, gettext_noop("Saving the site's languages")},
-    {:settings, gettext_noop("Applying essential settings")},
-    {:components, gettext_noop("Installing UI components")},
-    {:starter_content, gettext_noop("Adding starter content")},
-    {:auth_pages, gettext_noop("Adding sign-in pages")},
-    {:extensions, gettext_noop("Installing the extensions you chose")},
-    {:compile, gettext_noop("Compiling the site runtime")},
-    {:finalize, gettext_noop("Finishing up")}
+  # AFTER EVERY PART, an extension's included: the compile turns every row the install wrote into
+  # modules, and the flag closes the installer.
+  @finish [
+    {"compile", gettext_noop("Compiling the site runtime")},
+    {"finalize", gettext_noop("Finishing up")}
   ]
 
   @doc """
@@ -206,97 +199,130 @@ defmodule MishkaCmsCore.Install.Bootstrap do
     end
   end
 
-  @doc "The ordered install phases as `{id, label}` — one progress row per entry."
-  @spec steps() :: [{atom(), String.t()}]
-  def steps do
-    Enum.map(@steps, fn {id, label} -> {id, Gettext.gettext(MishkaCmsCore.Gettext, label)} end)
+  @doc """
+  The ordered install rows for the chosen `parts` (`t:MishkaCmsCore.Install.Seeds.picks/0`; `nil`
+  for the required and default ones), as `{row, label}`: one per part, then the compile and the
+  install flag.
+  """
+  @spec steps(Seeds.picks()) :: [{Seeds.row(), String.t()}]
+  def steps(parts \\ nil) do
+    rows = Seeds.steps(:prod, parts) ++ Enum.map(@finish, fn {id, label} -> {row(id), label} end)
+    Enum.map(rows, fn {row, label} -> {row, Gettext.gettext(MishkaCmsCore.Gettext, label)} end)
   end
 
   @doc """
-  Runs the install phases in order, calling `progress` with `{step_id, status, detail}` as each phase
-  starts (`:running`), emits a line (`:log`), finishes (`:done`) or fails (`:error`). Returns
-  `{:ok, %{user: user, site: site}}` or `{:error, reason}` from the first failing phase. `run/1` keeps
-  the silent behaviour for non-interactive callers (seeds, tests).
+  Runs the install, calling `progress` with `{row, status, detail}` as each row starts
+  (`:running`), emits a line (`:log`), finishes (`:done`) or fails (`:error`). Returns
+  `{:ok, %{user: user, site: site}}` or `{:error, reason}` from the first required part that failed.
+  `run/1` keeps the silent behaviour for non-interactive callers (seeds, tests).
+
+  The form fields of `params` are the core's own answers; `:answers` holds each other plugin's,
+  by key, and `:parts` what was chosen. The password travels as a function returning it, so a
+  plugin's crash report never prints it.
   """
   @spec run(params(), (term() -> any())) :: {:ok, %{user: map(), site: map()}} | {:error, term()}
   def run(params, progress \\ fn _ -> :ok end) do
-    result =
-      Enum.reduce_while(@steps, {:ok, %{params: params}}, fn {id, _label}, {:ok, acc} ->
-        progress.({id, :running, nil})
+    answers = params |> Map.get(:answers, %{}) |> Map.put(Seeds.core_key(), core_answers(params))
 
-        case run_step(id, acc, progress) do
-          {:ok, acc} ->
-            progress.({id, :done, nil})
-            {:cont, {:ok, acc}}
+    case Seeds.run(:prod, Map.get(params, :parts), answers: answers, progress: progress) do
+      {:ok, %{site: site, user: user}} ->
+        finish(site, progress)
+        {:ok, %{user: user, site: site}}
 
-          {:error, error} ->
-            progress.({id, :error, describe_error(error)})
-            {:halt, {:error, error}}
-        end
-      end)
+      # NO SITE AND NO MASTER means the core's own plugin is not running, and an install that wrote
+      # neither must not be flagged as done.
+      {:ok, _foundation} ->
+        {:error, :core_parts_not_running}
 
-    with {:ok, acc} <- result, do: {:ok, %{user: acc.user, site: acc.site}}
+      {:error, _reason} = error ->
+        error
+    end
   end
+
+  defp core_answers(params) do
+    params
+    |> Map.drop([:parts, :answers])
+    |> Map.update(:password, nil, fn password -> fn -> password end end)
+  end
+
+  defp finish(site, progress) do
+    progress.({row("compile"), :running, nil})
+    BootHandler.compile_site(site.id, site.name)
+    progress.({row("compile"), :done, nil})
+
+    progress.({row("finalize"), :running, nil})
+    MishkaCmsCore.Install.mark_installed!()
+    progress.({row("finalize"), :done, nil})
+  end
+
+  defp row(id), do: {Seeds.core_key(), id}
+
+  @doc """
+  Runs the core's production `part` (`MishkaCmsCore.Install.CoreSeed`) with the installer's
+  `answers`, on the `foundation` the parts before it built, and returns what it adds to the
+  foundation. `progress` takes a line for the part's row.
+  """
+  @spec run_part(String.t(), map(), map(), (String.t() -> any())) ::
+          {:ok, map()} | {:error, term()}
 
   # EVERY CORE NAME, so an operator can grant a narrow admin without creating the name first. An
-  # extension's names arrive with it, in the :extensions step or when it is set up later.
-  defp run_step(:permissions, acc, _progress) do
+  # extension's names arrive with it, in its own part or when it is set up later.
+  def run_part("permissions", _answers, _foundation, _progress) do
     with {:ok, %{stored: stored}} <- ensure_permissions() do
-      {:ok, Map.put(acc, :star, Enum.find(stored, &(&1.name == "*")))}
+      {:ok, %{permissions: stored, star: Enum.find(stored, &(&1.name == "*"))}}
     end
   end
 
-  defp run_step(:master_user, acc, _progress) do
-    with {:ok, user} <- create_master_user(acc.params),
-         :ok <- grant_permission(user, acc.star) do
-      {:ok, Map.put(acc, :user, user)}
+  def run_part("master_user", answers, foundation, _progress) do
+    with {:ok, user} <- create_master_user(answers),
+         :ok <- grant_permission(user, foundation.star) do
+      {:ok, %{user: user, users: %{master: [user], tenant: %{}}}}
     end
   end
 
-  defp run_step(:site, acc, _progress) do
-    with {:ok, site} <- create_site(acc.params), do: {:ok, Map.put(acc, :site, site)}
+  def run_part("site", answers, _foundation, _progress) do
+    with {:ok, site} <- create_site(answers), do: {:ok, %{site: site, sites: [site]}}
   end
 
   # BEFORE THE STARTER PAGES AND THE EXTENSIONS, so every page written after it answers each of
   # these languages. Fires `installer:languages:saved` with the site id and the saved list.
-  defp run_step(:languages, %{params: %{languages: languages}, site: site} = acc, progress) do
+  def run_part("languages", %{languages: languages} = answers, %{site: site}, progress) do
     with :ok <- valid_languages(languages),
          {:ok, saved} <-
            Settings.put("site.languages", languages, site_id: site.id, category: "general"),
-         :ok <- save_language_urls(acc.params, site) do
+         :ok <- save_language_urls(answers, site) do
       MishkaInstaller.Event.Hook.call(
         "installer:languages:saved",
         %{site_id: site.id, languages: saved},
         return: false
       )
 
-      progress.({:languages, :log, Languages.names(saved)})
-      {:ok, acc}
+      progress.(Languages.names(saved))
+      {:ok, %{}}
     end
   end
 
-  defp run_step(:languages, %{site: site} = acc, _progress) do
-    with :ok <- save_language_urls(acc.params, site), do: {:ok, acc}
+  def run_part("languages", answers, %{site: site}, _progress) do
+    with :ok <- save_language_urls(answers, site), do: {:ok, %{}}
   end
 
-  defp run_step(:settings, acc, _progress) do
-    apply_settings(Map.get(acc.params, :settings, %{}))
-    {:ok, acc}
+  def run_part("settings", answers, _foundation, _progress) do
+    apply_settings(Map.get(answers, :settings, %{}))
+    {:ok, %{}}
   end
 
-  defp run_step(:components, acc, progress) do
-    selection = Map.get(acc.params, :component_selection, %{})
+  def run_part("components", answers, _foundation, progress) do
+    selection = Map.get(answers, :component_selection, %{})
     components = Map.get(selection, :components, [])
 
     if components != [],
       do:
         progress.(
-          {:components, :log,
-           ngettext(
-             "Installing %{count} component…",
-             "Installing %{count} components…",
-             length(components)
-           )}
+          ngettext(
+            "Installing %{count} component…",
+            "Installing %{count} components…",
+            length(components)
+          )
         )
 
     install_components(selection)
@@ -304,103 +330,52 @@ defmodule MishkaCmsCore.Install.Bootstrap do
     if components != [],
       do:
         progress.(
-          {:components, :log,
-           ngettext(
-             "%{count} component installed",
-             "%{count} components installed",
-             length(components)
-           )}
+          ngettext(
+            "%{count} component installed",
+            "%{count} components installed",
+            length(components)
+          )
         )
 
-    {:ok, acc}
+    {:ok, %{}}
   end
 
-  # BEFORE THE COMPILE STEP, because that is what turns the rows just written into modules and a
+  # BEFORE THE COMPILE, because that is what turns the rows just written into modules and a
   # stylesheet, and before the extensions, whose pages hang on the layout it writes. Always: see
   # "The starter is not a choice" above. An install migrating its own content replaces the home
   # page; the frame is what every page of it is drawn in.
-  defp run_step(:starter_content, acc, progress) do
+  def run_part("starter_content", answers, %{site: site}, progress) do
     # THE NAME AS TYPED. `Site :create` slugifies it, so the row says `acme-docs` where the user
     # wrote "Acme Docs" — the tenant key, and not what belongs in the header of their first page.
-    report = StarterContent.seed!(acc.site, brand: acc.params[:site_name])
+    report = StarterContent.seed!(site, brand: answers[:site_name])
 
     progress.(
-      {:starter_content, :log,
-       ngettext(
-         "%{pages} page, %{components} components",
-         "%{pages} pages, %{components} components",
-         length(report.pages),
-         pages: length(report.pages),
-         components: length(report.components)
-       )}
+      ngettext(
+        "%{pages} page, %{components} components",
+        "%{pages} pages, %{components} components",
+        length(report.pages),
+        pages: length(report.pages),
+        components: length(report.components)
+      )
     )
 
-    {:ok, acc}
+    {:ok, %{}}
   end
 
-  # A SITE WITH NO SIGN-IN PAGE LETS NOBODY SIGN IN, its master included. Before the compile step,
-  # which turns them into modules, and after the settings, whose languages decide which built-in
-  # words are written.
-  defp run_step(:auth_pages, acc, progress) do
-    report = StarterContent.ensure_auth!(acc.site)
+  # A SITE WITH NO SIGN-IN PAGE LETS NOBODY SIGN IN, its master included. Before the compile, which
+  # turns them into modules, and after the settings, whose languages decide which built-in words are
+  # written.
+  def run_part("auth_pages", _answers, %{site: site}, progress) do
+    report = StarterContent.ensure_auth!(site)
 
     progress.(
-      {:auth_pages, :log,
-       gettext("%{pages} sign-in pages, %{translations} translated words",
-         pages: length(report.pages),
-         translations: report.translations
-       )}
+      gettext("%{pages} sign-in pages, %{translations} translated words",
+        pages: length(report.pages),
+        translations: report.translations
+      )
     )
 
-    {:ok, acc}
-  end
-
-  # AFTER THE PAGES, BEFORE THE COMPILE. An extension writes permission names, components and pages
-  # of its own, and the
-  # compile step is what turns every page this install wrote into a module — so an extension arriving
-  # after it would leave its pages uncompiled until something else rebuilt the site.
-  #
-  # ONE EXTENSION FAILING DOES NOT FAIL THE INSTALL. The CMS is usable without a blog; a failed row
-  # is logged, said on the screen, and the extension's own menu offers to set it up again. Halting
-  # here would leave an operator with no admin at all because a plugin they ticked raised.
-  defp run_step(:extensions, acc, progress) do
-    for key <- List.wrap(Map.get(acc.params, :extensions, [])) do
-      answers = acc.params |> Map.get(:extension_answers, %{}) |> Map.get(key, %{})
-
-      case Extensions.install(acc.site.id, key, answers) do
-        {:ok, report} ->
-          progress.(
-            {:extensions, :log,
-             gettext(
-               "%{key}: %{permissions} permissions, %{pages} pages, %{components} components",
-               key: key,
-               permissions: length(Map.get(report, :permissions, [])),
-               pages: length(report.pages),
-               components: length(report.components)
-             )}
-          )
-
-        {:error, reason} ->
-          Logger.error("[Install] #{key} refused to install: #{inspect(reason)}")
-
-          progress.(
-            {:extensions, :log,
-             gettext("%{key}: could not be installed — the logs say why", key: key)}
-          )
-      end
-    end
-
-    {:ok, acc}
-  end
-
-  defp run_step(:compile, acc, _progress) do
-    BootHandler.compile_site(acc.site.id, acc.site.name)
-    {:ok, acc}
-  end
-
-  defp run_step(:finalize, acc, _progress) do
-    MishkaCmsCore.Install.mark_installed!()
-    {:ok, acc}
+    {:ok, %{}}
   end
 
   defp valid_languages(languages) do
@@ -422,10 +397,9 @@ defmodule MishkaCmsCore.Install.Bootstrap do
       else: {:error, {:invalid_language_urls, mode}}
   end
 
-  defp describe_error(error) when is_exception(error), do: Exception.message(error)
-  defp describe_error(error), do: inspect(error)
+  defp create_master_user(%{email: email, password: secret}) do
+    password = if is_function(secret, 0), do: secret.(), else: secret
 
-  defp create_master_user(%{email: email, password: password}) do
     User
     |> Ash.Changeset.for_create(
       :register_with_password,

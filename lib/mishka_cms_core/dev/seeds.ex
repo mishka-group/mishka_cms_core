@@ -4,9 +4,11 @@
 
 defmodule MishkaCmsCore.Dev.Seeds do
   @moduledoc """
-  Dev and stress seeds for MishkaCmsCore resources.
+  The dev and stress data the core's parts write (`MishkaCmsCore.Install.CoreSeed`) when the
+  installer's "load sample data" path or the host's seed scripts run `installer:seed`
+  (`MishkaCmsCore.Install.Seeds`). `run_part/2` writes one part; together their reports are the
+  foundation every extension's part is then run on, once per site:
 
-  Returns a map with foundation data so extension seeds can build on top:
     %{
       sites: [site, ...],
       users: %{master: [user, ...], tenant: %{site_id => [user, ...]}},
@@ -52,6 +54,12 @@ defmodule MishkaCmsCore.Dev.Seeds do
   writes, leaves a row it recognises exactly as it is — an admin may have edited it — and counts a
   row they ARCHIVED as present as well, because archiving it is what they said about it. That is
   `MishkaBlog.Provision`'s rule, and it is the one the whole file follows: nothing below updates.
+
+  An extension adds its own sample data as a `:dev` part on `installer:seed`; see
+  `MishkaCmsCore.Install.Seeds`.
+
+  DEV ONLY. `MishkaCmsCore.Install.Seeds.run/3` refuses a `:dev` run in a production build, so
+  nothing here is reached there.
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
@@ -61,7 +69,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
 
   alias MishkaCmsCore.Accounts.User
   alias MishkaCmsCore.Dev.{SeedMedia, StarterPages}
-  alias MishkaCmsCore.Install.{Bootstrap, StarterContent}
+  alias MishkaCmsCore.Install.{Bootstrap, Seeds, StarterContent}
 
   alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
 
@@ -85,7 +93,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # resolve to public IPs, so every page seeded onto them was unreachable from the machine that
   # seeded them — and `site_a` cannot be a host at all, because a `_` is not legal in a domain.
   # `*.localhost` resolves to the loopback in Chromium and Firefox without any setup; curl and some
-  # OS resolvers want an `/etc/hosts` line, which `dev_seed/1` prints.
+  # OS resolvers want an `/etc/hosts` line, which the `"site"` part prints.
   #
   # EACH ONE NAMES ITS OWN PAGES MODULE. A page names THIS site's components and THIS site's hooks
   # by name, so the list cannot be shared — see `MishkaCmsCore.Dev.LocalhostPages`.
@@ -173,90 +181,165 @@ defmodule MishkaCmsCore.Dev.Seeds do
                                )
 
   @doc """
-  Creates realistic dev seed data: 3 sites a browser on this machine can open, fixed users per site,
-  real Unix-style permissions, the production starter content, the dev showcase pages, media and JS
-  hooks.
+  Writes the core's `part` (`MishkaCmsCore.Install.CoreSeed`) for the dev installer, and returns its
+  report, which `MishkaCmsCore.Install.Seeds` merges into the foundation the next part is handed.
+
+  At `size: :normal` the parts write three sites a browser on this machine can open, fixed users per
+  site, real Unix-style permissions, every UI-kit component, the production starter content and
+  sign-in pages, and then (`"samples"`) the dev showcase pages, media and JS hooks. At
+  `size: :stress` they write the volumes `opts` asks for (`:sites`, `:master_users`,
+  `:tenant_users` and the per-site counts) and no starter, sign-in pages or kits. Together the
+  reports are `%{sites:, users: %{master:, tenant:}, permissions:}`. DEV ONLY.
   """
-  def dev_seed(progress \\ fn _ -> :ok end) do
+  @spec run_part(String.t(), map()) :: {:ok, map()} | {:error, term()}
+  def run_part(part, %{size: size, foundation: foundation, progress: log} = payload) do
+    prune_ancestors_to_pids()
+    {:ok, part(part, size, foundation, Map.get(payload, :opts, []), log)}
+  end
+
+  defp part("permissions", _size, _foundation, _opts, log) do
     announce("==> [MishkaCmsCore] Seeding core data...")
-    log = fn line -> progress.({:core, :log, line}) end
-
     log.(gettext("Creating permissions…"))
-    permissions = seed_permissions()
-    permission_map = Map.new(permissions, fn p -> {p.name, p} end)
+    %{permissions: seed_permissions()}
+  end
 
+  # `users.master` is handed to every extension's part as the masters: users whose `site_id` is
+  # nil and nobody else. A fixed user of a site goes with that site's users (`"samples"`).
+  defp part("master_user", :normal, foundation, _opts, log) do
+    log.(gettext("Creating master@example.com…"))
+    %{users: %{master: [seed_fixed_master(permission_map(foundation))], tenant: %{}}}
+  end
+
+  defp part("master_user", :stress, _foundation, opts, _log),
+    do: %{
+      users: %{
+        master: seed_stress_master_users(Keyword.get(opts, :master_users, 10)),
+        tenant: %{}
+      }
+    }
+
+  defp part("site", :normal, _foundation, _opts, log) do
     log.(gettext("Creating sites…"))
     sites = seed_sites()
-    localhost_site = Enum.find(sites, fn s -> s.host == "localhost" end)
     announce(@hosts_hint)
+    %{sites: sites}
+  end
 
-    log.(gettext("Creating users…"))
-    # `users.master` is handed to every extension's seed as the masters: users whose `site_id` is
-    # nil and nobody else. A fixed user of a site goes with that site's users.
-    {fixed_masters, fixed_site_users} =
-      localhost_site
-      |> seed_fixed_users(permission_map)
-      |> Enum.split_with(&is_nil(&1.site_id))
+  defp part("site", :stress, _foundation, opts, _log) do
+    announce("==> [MishkaCmsCore] Stress seeding #{Keyword.get(opts, :sites, 3000)} sites...")
+    %{sites: seed_stress_sites(Keyword.get(opts, :sites, 3000))}
+  end
 
-    master_users = seed_master_users(3, permission_map)
-    all_master_users = fixed_masters ++ master_users
+  # BEFORE ANY PAGE, which answers only in the languages its site names.
+  defp part("languages", :normal, %{sites: sites}, _opts, _log) do
+    Enum.each(sites, &seed_languages(&1, config_for(&1)))
+    %{}
+  end
 
-    site_users =
-      Enum.reduce(fixed_site_users, seed_site_users(sites, permission_map), fn user, acc ->
-        Map.update(acc, user.site_id, [user], &(&1 ++ [user]))
-      end)
-
-    # BEFORE THE PAGES, because the pages are made OF it. The showcase templates call
-    # `chelekom-tabs`, `chelekom-table` and their siblings; a page seeded before the kit exists
-    # resolves each of those to nothing and renders the red "Component failed to render!" box
-    # instead. This is also why the install lives here, where `priv/repo/dev_seeds.exs` reaches it
-    # too: it calls `dev_seed/1` directly.
+  # BEFORE THE PAGES, because the pages are made OF it. The showcase templates call
+  # `chelekom-tabs`, `chelekom-table` and their siblings; a page seeded before the kit exists
+  # resolves each of those to nothing and renders the red "Component failed to render!" box
+  # instead.
+  defp part("components", :normal, _foundation, _opts, log) do
     log.(gettext("Installing every UI-kit component — the sample pages are built from them…"))
     ensure_ui_kits!(log)
+    %{}
+  end
+
+  # THE PRODUCTION STARTER, RUN IN DEV. Every dev site gets the theme, the logo, the two site
+  # components, the `site-main` layout, the home page and the error page a stranger's first install
+  # gets, and the pages that stand beside the home — so that path is exercised on every reseed
+  # instead of only on somebody else's machine. Its layout is what the showcase pages hang on.
+  #
+  # THE MEDIA LIBRARY FIRST, because a page is written out of it: the team page asks
+  # `MishkaCmsCore.Dev.SeedMedia` what pictures the site has, and a library filled after the first
+  # page reads as one a fresh install had empty — silently, since "no picture" is also what a fresh
+  # install answers.
+  defp part("starter_content", :normal, %{sites: sites}, _opts, _log) do
+    starter =
+      Map.new(sites, fn site ->
+        seed_media(site.id)
+        report = StarterContent.seed!(site, starter_opts(site, config_for(site)))
+        announce_pages(report)
+        {site.id, report.layout_id}
+      end)
+
+    %{starter_layouts: starter}
+  end
+
+  # THE SIGN-IN PAGES EVERY SITE GETS, and the built-in words of each language it publishes in.
+  # A site seeded before the Error Page had an offline entry gets it on the next run.
+  defp part("auth_pages", :normal, %{sites: sites}, _opts, _log) do
+    Enum.each(sites, fn site ->
+      site |> StarterContent.ensure_auth!() |> announce_pages()
+
+      if StarterContent.ensure_offline_entry(site) == :added,
+        do: announce("  -> Added the offline page to #{site.name}'s error page")
+    end)
+
+    %{}
+  end
+
+  defp part("samples", :normal, foundation, _opts, log) do
+    %{sites: sites, users: %{master: masters}} = foundation
+    permission_map = permission_map(foundation)
+    localhost_site = Enum.find(sites, fn s -> s.host == "localhost" end)
+
+    log.(gettext("Creating users…"))
+
+    site_users =
+      Enum.reduce(
+        seed_fixed_site_users(localhost_site),
+        seed_site_users(sites, permission_map),
+        fn user, acc -> Map.update(acc, user.site_id, [user], &(&1 ++ [user])) end
+      )
+
+    master_users = masters ++ seed_master_users(3, permission_map)
 
     log.(gettext("Creating the global layout & hooks…"))
     global_layout = seed_global_layout()
     seed_global_js_hooks()
 
-    log.(gettext("Creating per-site content (theme, components, layout, pages, media)…"))
+    log.(gettext("Creating per-site content (pages, drafts, hooks)…"))
 
     Enum.each(sites, fn site ->
-      config = config_for(site)
+      main = Map.fetch!(foundation.starter_layouts, site.id)
 
-      # BEFORE THE PAGES, because a page is written out of this library: the team page asks
-      # `MishkaCmsCore.Dev.SeedMedia` what pictures the site has, and a page written first is a page
-      # with none — silently, since "no picture" is also what a fresh install answers.
-      seed_media(site.id)
-      seed_languages(site, config)
-
-      # THE PRODUCTION STARTER, RUN IN DEV. Every dev site gets the theme, the logo, the two site
-      # components, the `site-main` layout, the home page and the error page a stranger's first
-      # install gets, and the pages that stand beside the home — so that path is exercised on every
-      # reseed instead of only on somebody else's machine.
-      starter = StarterContent.seed!(site, starter_opts(site, config))
-      announce_pages(starter)
-
-      # THE SIGN-IN PAGES EVERY SITE GETS, and the built-in words of each language it publishes in
-      # — after the languages above, which decide that.
-      site |> StarterContent.ensure_auth!() |> announce_pages()
-
-      # A site seeded before the Error Page had an offline entry gets it on the next run.
-      if StarterContent.ensure_offline_entry(site) == :added,
-        do: announce("  -> Added the offline page to #{site.name}'s error page")
-
-      seed_pages(site, config, %{main: starter.layout_id, plain: global_layout.id}, site_users)
+      seed_pages(site, config_for(site), %{main: main, plain: global_layout.id}, site_users)
       seed_page_draft(site)
       seed_js_hooks(site.id, 2)
     end)
 
     announce("==> [MishkaCmsCore] Done.")
 
-    %{
-      sites: sites,
-      users: %{master: all_master_users, tenant: site_users},
-      permissions: permissions
-    }
+    %{users: %{master: master_users, tenant: site_users}}
   end
+
+  defp part("samples", :stress, %{sites: sites, users: users}, opts, _log) do
+    tenant = seed_stress_tenant_users(sites, Keyword.get(opts, :tenant_users, 20))
+
+    Enum.each(sites, fn site ->
+      seed_layouts(site.id, Keyword.get(opts, :layouts_per_site, 20))
+      seed_error_pages(site.id, Keyword.get(opts, :error_pages_per_site, 3))
+      seed_js_hooks(site.id, Keyword.get(opts, :hooks_per_site, 10))
+
+      seed_stress_media(
+        site.id,
+        Keyword.get(opts, :media_categories_per_site, 10),
+        Keyword.get(opts, :media_per_site, 100)
+      )
+    end)
+
+    announce("==> [MishkaCmsCore] Stress seed done.")
+
+    %{users: %{users | tenant: tenant}}
+  end
+
+  # A STRESS RUN WRITES VOLUMES, NOT A SITE ANYONE OPENS: the languages, the kits, the starter and
+  # the sign-in pages are the dev run's.
+  defp part(_part, :stress, _foundation, _opts, _log), do: %{}
+
+  defp permission_map(%{permissions: permissions}), do: Map.new(permissions, &{&1.name, &1})
 
   defp config_for(%{host: host}), do: Enum.find(@site_configs, &(&1.host == host))
 
@@ -291,26 +374,20 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # links), so what the header carries beside it is a production install's: Docs and GitHub. In the
   # order a developer reads them — the pages every dev site has, then the ones the site is for, then
   # the extensions' — and each path is stored as `/:lang/<path>`, so it follows the site's URL mode.
+  #
+  # THE EXTENSIONS' FRONT PAGES are the `nav` of every `:dev` part on `installer:seed`
+  # (`MishkaCmsCore.Install.Seeds.nav/0`), in the order the parts run. A `to:` link stays literal,
+  # for a page that answers no language. A build without an extension has no link to a page it cannot
+  # have; a part that was not picked is a link to the site's 404 until it is.
   @doc false
   @spec nav(map() | String.t(), [StarterContent.nav_link()]) :: [StarterContent.nav_entry()]
-  def nav(config, extensions \\ extension_links())
+  def nav(config, extensions \\ Seeds.nav())
 
   def nav(site_name, extensions) when is_binary(site_name),
     do: @site_configs |> Enum.find(&(&1.name == site_name)) |> nav(extensions)
 
   def nav(%{pages: pages}, extensions),
     do: [%{label: "Dev", children: StarterPages.nav() ++ pages.nav() ++ extensions}]
-
-  # THE EXTENSIONS' FRONT PAGES, for the extensions this build has (`categories/0`): `/:lang/blog`
-  # and `/:lang/docs` are the pages their dev seeds write on every site, `site-a` included — it
-  # prefixes every language, so its `/blog` is a redirect to `/en/blog` and not a missing page. A
-  # build without an extension has no link to a page it cannot have. An extension that is there but
-  # was not picked in the installer's dev step is a link to the site's 404 until it is.
-  @extension_links [blog: {"Blog", "/blog"}, document: {"Docs", "/docs"}]
-
-  defp extension_links do
-    for %{key: key} <- categories(), link = Keyword.get(@extension_links, key), do: link
-  end
 
   # THE LANGUAGES ARE A SETTING, and every `/:lang` page answers only in the ones it names — see
   # `MishkaCmsCore.Runtime.Languages`. So is how an address names them: `localhost` and `site-b`
@@ -335,66 +412,6 @@ defmodule MishkaCmsCore.Dev.Seeds do
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(key == ^key and site_id == ^site_id)
     |> Ash.exists?(authorize?: false)
-  end
-
-  @doc """
-  The optional extension seed categories the installer's dev step can layer on top of the core
-  foundation — only those whose seed module is actually loaded. The core data (sites, users,
-  permissions, components, …) is always seeded by `run/1`, so it is not listed here.
-  """
-  @spec categories() :: [%{key: atom(), label: String.t(), module: module()}]
-  def categories do
-    [
-      %{key: :blog, label: "Mishka Blog", module: MishkaBlog.Dev.Seeds},
-      %{key: :document, label: "Mishka Document", module: MishkaDocument.Dev.Seeds}
-    ]
-    |> Enum.filter(&Code.ensure_loaded?(&1.module))
-  end
-
-  @doc """
-  The ordered seed phases for `selected`, as `{id, label}` — one progress row per phase (the installer
-  renders these as a live checklist). Always starts with `:core`, which installs every UI-kit
-  component too; the extension seeds are added when selected.
-  """
-  @spec steps([atom()]) :: [{atom(), String.t()}]
-  def steps(selected) do
-    extensions =
-      categories() |> Enum.filter(&(&1.key in selected)) |> Enum.map(&{&1.key, &1.label})
-
-    [{:core, gettext_noop("Seeding core data (sites, users, permissions, UI kits, content)")}] ++
-      extensions
-  end
-
-  @doc """
-  Runs the dev seed for local development: the core foundation, every UI-kit component and the
-  content (always), plus — when chosen — the extension seeds per site (mirrors
-  `priv/repo/dev_seeds.exs`). For DEV ONLY — never in production. `progress` is called with
-  `{phase, status, detail}` so the installer can show a live checklist. Returns the core foundation
-  map.
-  """
-  @spec run([atom()], (term() -> any())) :: map()
-  def run(selected \\ [], progress \\ fn _ -> :ok end) do
-    prune_ancestors_to_pids()
-
-    progress.({:core, :running, nil})
-    core = dev_seed(progress)
-    progress.({:core, :done, nil})
-
-    categories()
-    |> Enum.filter(&(&1.key in selected))
-    |> Enum.each(fn %{key: key, module: module} ->
-      progress.({key, :running, nil})
-      section = fn line -> progress.({key, :log, line}) end
-
-      Enum.each(core.sites, fn site ->
-        users = core.users.master ++ Map.get(core.users.tenant, site.id, [])
-        module.dev_seed(site.id, users, section)
-      end)
-
-      progress.({key, :done, nil})
-    end)
-
-    core
   end
 
   # EVERY COMPONENT OF EVERY KIT, with nothing to choose: a dev database is where all of them get
@@ -435,37 +452,6 @@ defmodule MishkaCmsCore.Dev.Seeds do
 
   defp prune_ancestors_to_pids do
     Process.put(:"$ancestors", Enum.filter(Process.get(:"$ancestors", []), &is_pid/1))
-  end
-
-  @doc """
-  Stress seed: creates `count` sites with proportional data per site.
-  """
-  def stress_seed(opts \\ []) do
-    site_count = Keyword.get(opts, :sites, 3000)
-    layouts_per_site = Keyword.get(opts, :layouts_per_site, 20)
-    error_pages_per_site = Keyword.get(opts, :error_pages_per_site, 3)
-    hooks_per_site = Keyword.get(opts, :hooks_per_site, 10)
-    media_categories_per_site = Keyword.get(opts, :media_categories_per_site, 10)
-    media_per_site = Keyword.get(opts, :media_per_site, 100)
-    master_users = Keyword.get(opts, :master_users, 10)
-    tenant_users = Keyword.get(opts, :tenant_users, 20)
-
-    announce("==> [MishkaCmsCore] Stress seeding #{site_count} sites...")
-
-    _permissions = seed_permissions()
-    sites = seed_stress_sites(site_count)
-    _master_users = seed_stress_master_users(master_users)
-    _tenant_users = seed_stress_tenant_users(sites, tenant_users)
-
-    Enum.each(sites, fn site ->
-      seed_layouts(site.id, layouts_per_site)
-      seed_error_pages(site.id, error_pages_per_site)
-      seed_js_hooks(site.id, hooks_per_site)
-      seed_stress_media(site.id, media_categories_per_site, media_per_site)
-    end)
-
-    announce("==> [MishkaCmsCore] Stress seed done.")
-    :ok
   end
 
   # THE SAME NAMES THE INSTALL CREATES (`MishkaCmsCore.Install.Bootstrap.permissions/0`), only the
@@ -514,25 +500,27 @@ defmodule MishkaCmsCore.Dev.Seeds do
     |> Ash.create!(authorize?: false)
   end
 
+  # THE PERMISSIONS ARE ASSIGNED EITHER WAY. `UserPermission`'s `:assign` is an upsert on
+  # `(user_id, permission_id)`, so a user who already holds one keeps the one row they have, and a
+  # run that died between creating the account and granting it finishes the job on the next one
+  # rather than leaving a `master@example.com` nobody can sign in as anything with.
+  defp seed_fixed_master(permission_map) do
+    announce("  -> Creating the fixed master (master@example.com with *)...")
+
+    account = existing_user("master@example.com", nil) || create_user("master@example.com", nil)
+    assign_permission(account.id, Map.fetch!(permission_map, "*"))
+    account
+  end
+
   # `none@example.com` HOLDS NOTHING, as its name says. An earlier seed granted it `*`; a database
   # seeded then keeps that grant, because a second run never takes away what is there.
-  defp seed_fixed_users(localhost_site, permission_map) do
-    announce("  -> Creating fixed users (master@example.com with *, none@example.com)...")
+  defp seed_fixed_site_users(localhost_site) do
+    announce("  -> Creating the fixed site user (none@example.com)...")
 
-    fixed = [
-      %{email: "master@example.com", site_id: nil, names: ["*"]},
-      %{email: "none@example.com", site_id: localhost_site.id, names: []}
+    [
+      existing_user("none@example.com", localhost_site.id) ||
+        create_user("none@example.com", localhost_site.id)
     ]
-
-    # THE PERMISSIONS ARE ASSIGNED EITHER WAY. `UserPermission`'s `:assign` is an upsert on
-    # `(user_id, permission_id)`, so a user who already holds one keeps the one row they have, and a
-    # run that died between creating the account and granting it finishes the job on the next one
-    # rather than leaving a `master@example.com` nobody can sign in as anything with.
-    Enum.map(fixed, fn %{email: email, site_id: site_id, names: names} ->
-      account = existing_user(email, site_id) || create_user(email, site_id)
-      Enum.each(names, &assign_permission(account.id, Map.fetch!(permission_map, &1)))
-      account
-    end)
   end
 
   # Find-or-create for the same reason `seed_permissions/0` is: the install wizard bootstraps the
@@ -557,7 +545,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
     end)
   end
 
-  # `auth_pages: :inline` — `dev_seed/1` writes the sign-in pages itself, so no job is enqueued.
+  # `auth_pages: :inline` — the `"auth_pages"` part writes the sign-in pages itself, so no job is enqueued.
   defp create_site_from_config(config) do
     Site
     |> Ash.Changeset.for_create(

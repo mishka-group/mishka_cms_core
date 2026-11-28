@@ -17,6 +17,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  on_mount MishkaCmsCore.Accounts.AdminSite
+
   alias MishkaCmsCore.Runtime.{Translation, Translations}
   alias MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup
   alias MishkaGervaz.Table.Web.UrlSync

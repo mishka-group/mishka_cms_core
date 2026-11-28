@@ -218,6 +218,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     Translation
   }
 
+  alias MishkaCmsCore.Install.Extensions
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
 
@@ -1065,7 +1066,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               </button>
               <.link
                 :if={!@current_user}
-                navigate={site_path("/:lang/auth", @lang)}
+                navigate={MishkaCmsCoreWeb.ReturnTo.returning(site_path("/:lang/auth", @lang), @current_path)}
                 class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg max-lg:flex-1 max-lg:justify-center dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
               >
                 Sign in
@@ -1219,6 +1220,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
           logo_attr(logo),
           lang_attr(),
           user_attr(),
+          path_attr(),
           editions_attr(),
           class_attr("Extra classes for the header itself")
         ],
@@ -1327,6 +1329,18 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "opts" => %{
         "default" => nil,
         "doc" => "`@current_user`, the signed-in visitor. Their menu takes the place of Sign in."
+      }
+    }
+  end
+
+  defp path_attr do
+    %{
+      "name" => "current_path",
+      "type" => "string",
+      "opts" => %{
+        "default" => nil,
+        "doc" =>
+          "`@current_path`, the page being viewed. Sign in carries it as a signed `return_to` (`MishkaCmsCoreWeb.ReturnTo.returning/2`), so the visitor lands back on it."
       }
     }
   end
@@ -1484,6 +1498,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         site="#{site_name}"
         lang={lang(assigns)}
         current_user={assigns[:current_user]}
+        current_path={assigns[:current_path]}
         editions={assigns[:page_languages] || []}
       >#{nav_links(nav)}
       </.component>
@@ -1554,6 +1569,118 @@ defmodule MishkaCmsCore.Install.StarterContent do
       {entry, _index} ->
         entry |> nav_target() |> nav_link()
     end)
+  end
+
+  @doc """
+  Adds `link` to the header menu of `site_id`, as an admin adding it in the header editor would:
+  the starter layout's `site-header` call gets one more link (`nav_links/1`'s markup) after the
+  links it holds, and nothing else of the layout changes. `link` is `%{label:, path:}` (a path
+  behind the page's language) or `%{label:, to:}` (a literal path); its label is translated into
+  the site's primary language (`MishkaCmsCore.Gettext`).
+
+  It adds a link once: a header that already links the same path, in any form (behind the
+  language, as a literal path with or without a language in front, a full address on any host, in
+  a dropdown), is `:held` and left as it is. A site whose layout has no `site-header` call (the
+  owner replaced the starter's) is `:no_header`. One read, and one write when it adds.
+  `MishkaCmsCore.Install.Extensions.install/4` calls it for the links an extension declares, the
+  first time the extension is set up on a site.
+  """
+  @spec add_nav_link(String.t(), Extensions.nav_link()) :: :added | :held | :no_header
+  def add_nav_link(site_id, %{label: label} = link) when is_binary(site_id) do
+    with %{template: template} = layout <- held_row(Layout, site_id, @layout_name),
+         {start, close} <- header_call(template) do
+      header = binary_part(template, start, close - start)
+
+      case nav_path(link) in header_paths(header) do
+        true -> :held
+        false -> write_nav_link(layout, template, close, translated(link, label, site_id))
+      end
+    else
+      _no_header -> :no_header
+    end
+  end
+
+  # Where the layout's `site-header` call starts and where its closing tag is. A call that closes
+  # itself (`/>`) has no links between tags, and the next `</.component>` is another call's.
+  defp header_call(template) do
+    with {start, _length} <- :binary.match(template, ~s(component_name="site-header")),
+         rest = binary_part(template, start, byte_size(template) - start),
+         {close, _length} <- :binary.match(rest, "</.component>"),
+         :nomatch <- :binary.match(binary_part(rest, 0, close), "<.component") do
+      {start, start + trim_back(rest, close)}
+    else
+      _no_header_call -> nil
+    end
+  end
+
+  # Before the closing tag's indentation, so the new link sits on its own line after the others.
+  defp trim_back(rest, at) do
+    head = binary_part(rest, 0, at)
+    byte_size(String.trim_trailing(head))
+  end
+
+  defp write_nav_link(layout, template, at, link) do
+    head = binary_part(template, 0, at)
+    tail = binary_part(template, at, byte_size(template) - at)
+
+    layout
+    |> Ash.Changeset.for_update(:update, %{template: head <> nav_links([link]) <> tail},
+      tenant: layout.site_id,
+      authorize?: false,
+      context: %{page_code: :package}
+    )
+    |> Ash.update!()
+
+    :added
+  end
+
+  defp translated(link, label, site_id) do
+    language = Languages.primary(site_id)
+
+    text =
+      Gettext.with_locale(MishkaCmsCore.Gettext, language, fn ->
+        Gettext.gettext(MishkaCmsCore.Gettext, label)
+      end)
+
+    %{link | label: text}
+  end
+
+  # THE PATHS A HEADER LINKS, each as the site path it opens: behind the language
+  # (`site_path("/:lang/blog", …)`), a literal `/blog` or `/en/blog`, or a full address.
+  @link_target ~r/(?:navigate|href|patch)=(?:"([^"]*)"|\{\s*site_path\(\s*"([^"]*)")/
+
+  defp header_paths(header) do
+    for [_whole | targets] <- Regex.scan(@link_target, header),
+        target = Enum.find(targets, &(&1 != "")),
+        is_binary(target),
+        do: site_link_path(target)
+  end
+
+  defp nav_path(%{path: path}), do: site_link_path(path)
+  defp nav_path(%{to: path}), do: site_link_path(path)
+
+  defp site_link_path(target) do
+    path = URI.parse(target).path || "/"
+
+    path
+    |> String.replace_prefix("/:lang", "")
+    |> without_language()
+    |> String.trim_trailing("/")
+    |> case do
+      "" -> "/"
+      path -> path
+    end
+  end
+
+  # `/en/blog` and `/pt-BR/blog` are `/blog`: the first segment is a language code.
+  defp without_language(path) do
+    case String.split(path, "/", parts: 3) do
+      ["", code, rest] when byte_size(code) in [2, 5] ->
+        if Regex.match?(~r/\A[a-z]{2}(-[A-Za-z]{2})?\z/, code), do: "/" <> rest, else: path
+
+      _other ->
+        path
+    end
   end
 
   defp nav_target({label, path}), do: {label, {:lang, path}}
@@ -2267,10 +2394,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
       },
       %{
         name: "Auth password reset",
-        title: "Reset your password",
+        title: "Set your password",
         path: "/:lang/auth/password-reset/:token",
         role: "password_reset",
-        description: "Set a new password from the link in the reset email.",
+        description: "Set a password, first time or after a reset, from the link in an email.",
         template: password_reset_template(),
         events: [],
         helpers: @navigation ++ ~w(chevron_left_svg lock_alert_svg)
@@ -2692,7 +2819,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
           </span>{t("Welcome")}
         </div>
         <h1 class="#{@title_class}">{t("Welcome back")}</h1>
-        <p class="#{@lede_class}">{t("Sign in to manage your content, media and team.")}</p>
+        <p class="#{@lede_class}">{t("Sign in to your account.")}</p>
 
         <.sign_in_providers
           site={assigns[:current_site]}
@@ -3205,8 +3332,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
       <span class="mb-4 flex size-[46px] items-center justify-center rounded-[14px] bg-[#fbf1df] text-[#a5691a]">
         <.lock_alert_svg />
       </span>
-      <h1 class="#{@title_class}">{t("Reset your password")}</h1>
-      <p class="#{@lede_class}">{t("Choose a new password for your account.")}</p>
+      <h1 class="#{@title_class}">{t("Set your password")}</h1>
+      <p class="#{@lede_class}">{t("Choose a password for your account.")}</p>
     </div>
     <div class="mt-6">
       <.live_component
@@ -4095,8 +4222,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "Multi-site ready" => "آماده برای چند سایت",
       "Welcome" => "خوش آمدید",
       "Welcome back" => "خوش برگشتید",
-      "Sign in to manage your content, media and team." =>
-        "وارد شوید تا محتوا، رسانه و تیمتان را مدیریت کنید.",
+      "Sign in to your account." => "وارد حساب کاربری خود شوید.",
       "Continue with %{provider}" => "ادامه با %{provider}",
       "or with email" => "یا با ایمیل",
       "This sign-in has expired" => "این ورود منقضی شده است",
@@ -4185,7 +4311,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "Send magic link" => "ارسال لینک جادویی",
       "If an account exists for that email, a magic sign-in link is on its way." =>
         "اگر حسابی با این ایمیل وجود داشته باشد، لینک ورود جادویی در راه است.",
-      "Choose a new password for your account." => "برای حسابتان رمز عبور تازه‌ای برگزینید.",
+      "Set your password" => "رمز عبورتان را تعیین کنید",
+      "Choose a password for your account." => "برای حسابتان رمز عبوری برگزینید.",
       "Confirm your account" => "تأیید حساب",
       "One more step to activate your account." => "یک گام دیگر تا فعال شدن حسابتان.",
       "Magic sign in" => "ورود جادویی",

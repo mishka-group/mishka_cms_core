@@ -206,6 +206,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index do
     end
   end
 
+  # A MASTER SEES EVERY SITE, a site's admin only their own, as `role_name/1` decides.
+  @doc false
+  def subtitle(%{site_id: nil}), do: gettext("Everything across your sites, at a glance.")
+  def subtitle(_site_admin), do: gettext("Everything on your site, at a glance.")
+
   @doc false
   def date_str, do: Localized.date(Date.utc_today(), :full)
 

@@ -125,6 +125,10 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Agent.Installer
   ]
 
+  # `installer:seed` plugins — the core's own parts, first and run once, which every extension's
+  # parts build on (`MishkaCmsCore.Install.Seeds`).
+  @seed_plugins [MishkaCmsCore.Install.CoreSeed]
+
   @doc """
   Every mishka_installer plugin the core ships, and exactly the plugins `start/2` supervises. A plugin
   left out of it never registers, so the event it listens on never reaches it.
@@ -139,7 +143,8 @@ defmodule MishkaCmsCore.Application do
         @site_icon_plugins ++
         @head_code_plugins ++
         @mail_providers ++
-        @captcha_providers ++ @account_notices ++ @agent_operations ++ @sidebar_status_plugins
+        @captcha_providers ++
+        @account_notices ++ @agent_operations ++ @sidebar_status_plugins ++ @seed_plugins
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

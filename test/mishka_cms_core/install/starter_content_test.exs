@@ -474,6 +474,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
             logo: "/logo.png",
             lang: "en",
             current_user: nil,
+            current_path: nil,
             editions: [],
             class: nil,
             inner_block: []
@@ -545,6 +546,12 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
                @github,
                "https://mishka.tools/sponsor"
              ]
+    end
+
+    # A typed year goes stale on the first of January; the template reads the date it is drawn on.
+    test "the footer's year is the year it is drawn in, never one typed into it", %{site: site} do
+      assert footer_html(site) =~ "© #{Date.utc_today().year} ·"
+      refute component(site, "site-footer").template =~ ~r/©\s*\d{4}/
     end
 
     test "prefix every language in prefix_all", %{site: site} do
@@ -1022,6 +1029,31 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       refute html =~ "site-sign-out"
     end
 
+    # THE PAGE BEING VIEWED TRAVELS AS A SIGNED `return_to`, so signing in from the header lands
+    # back on it; the sign-in pages themselves carry none.
+    test "Sign in carries the page being viewed, signed, and nothing on home or the sign-in pages",
+         %{
+           site: site
+         } do
+      sign_in = sign_in_href(header_html(site, %{current_path: "/buy/x"}))
+
+      assert %URI{path: "/auth", query: query} = URI.parse(sign_in)
+      assert %{"return_to" => token} = URI.decode_query(query)
+      assert MishkaCmsCoreWeb.ReturnTo.verify(MishkaCmsCore.TestEndpoint, token) == "/buy/x"
+
+      for path <- ["/", "/auth", "/auth/sign-out", "/auth/register", nil] do
+        assert sign_in_href(header_html(site, %{current_path: path})) == "/auth",
+               "Sign in on #{inspect(path)} carried a return_to"
+      end
+    end
+
+    defp sign_in_href(html) do
+      [href] =
+        Regex.run(~r/<a href="([^"]*)"[^>]*>\s*Sign in\s*<\/a>/, html, capture: :all_but_first)
+
+      String.replace(href, "&amp;", "&")
+    end
+
     test "a signed-in visitor sees their email, and Sign in is gone", %{site: site} do
       user = create_user!()
       html = signed_in(site, user)
@@ -1084,13 +1116,18 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       assert MishkaCmsCore.Runtime.Compilers.UserClosure.reads_user?(one(Layout, site))
     end
 
-    test "the layout hands the header the visitor and the page's languages", %{site: site} do
+    test "the layout hands the header the visitor, the page's address and its languages", %{
+      site: site
+    } do
       template = one(Layout, site).template
 
       assert template =~
                ~r/component_name="site-header".*?current_user=\{assigns\[:current_user\]\}/s
 
       assert template =~ ~r/component_name="site-header".*?editions=\{assigns\[:page_languages\]/s
+
+      assert template =~
+               ~r/component_name="site-header".*?current_path=\{assigns\[:current_path\]\}/s
     end
   end
 

@@ -323,6 +323,9 @@ defmodule MishkaCmsCore.Runtime.ShareCardRedrawAllTest do
     end
 
     test "its name or logo does; another setting does not", %{site: site} do
+      # THE NEW SITE ALREADY LOOKED AT ITS CARDS: its own title, written when it was created.
+      MishkaCmsCore.Repo.delete_all(Oban.Job)
+
       {:ok, _} = Settings.put("seo.robots", "index", site_id: site.id)
       assert planned(site.id) == []
 

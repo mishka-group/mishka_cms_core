@@ -25,6 +25,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
   patch the same URL and leave it as it is.
   """
   use MishkaCmsCore.ExtensionLiveView
+
+  on_mount MishkaCmsCore.Accounts.AdminSite
   require Ash.Query
   alias Phoenix.LiveView.AsyncResult
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions

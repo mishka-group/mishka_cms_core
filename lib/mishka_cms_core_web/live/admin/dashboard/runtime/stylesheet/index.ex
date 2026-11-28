@@ -10,6 +10,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Stylesheet.Index do
   Overview · Code · Versions · Configuration — with add/edit happening inside the Configuration tab.
   """
   use MishkaCmsCore.ExtensionLiveView
+
+  on_mount MishkaCmsCore.Accounts.AdminSite
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
   alias MishkaGervaz.Table.Web.UrlSync

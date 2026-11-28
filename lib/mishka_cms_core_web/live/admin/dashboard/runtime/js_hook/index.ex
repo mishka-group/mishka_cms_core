@@ -5,6 +5,8 @@
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.JsHook.Index do
   @moduledoc false
   use MishkaCmsCore.ExtensionLiveView
+
+  on_mount MishkaCmsCore.Accounts.AdminSite
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
   alias MishkaGervaz.Table.Web.UrlSync

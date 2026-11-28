@@ -30,8 +30,17 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
+  alias MishkaCmsCore.Accounts.AdminSite
   alias MishkaCmsCore.Helpers
-  alias MishkaCmsCore.Layouts.{SidebarStatus, TopbarNeeds, TopbarSearch, TopbarStatus}
+
+  alias MishkaCmsCore.Layouts.{
+    SidebarStatus,
+    SiteSwitcher,
+    TopbarNeeds,
+    TopbarSearch,
+    TopbarStatus
+  }
+
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -737,8 +746,13 @@ defmodule MishkaCmsCore.Layouts do
   (`MishkaCmsCore.Layouts.TopbarItems`). They are drawn in order at the right, before the theme
   toggle, in `#admin-topbar-items`, each with `current_user`, `current_site`, `current_path` and `view`; with
   none, the slot is not drawn. `current_site` and `view` are for these items and the search box. Below
-  640px only an item that sets `phone: true` stays (a site switcher a person needs everywhere), and it
+  640px only an item that sets `phone: true` stays (a control a person needs everywhere), and it
   draws itself small enough for the phone's bar.
+
+  A master of a CMS with two active sites or more gets the site switcher
+  (`MishkaCmsCore.Layouts.SiteSwitcher`) after the extensions' items, on every admin page and on a
+  phone too; `admin_site` is the page's `@admin_site` (`MishkaCmsCore.Accounts.AdminSite`), what the
+  switcher names and how it knows the page follows a pick. A site user never gets it.
 
   `needs` is `@topbar_needs`, the bell's "What needs you" items (`MishkaCmsCore.Layouts.TopbarNeeds`),
   listed above the notifications under one folding header per group (`TopbarNeeds.groups/1`), each
@@ -759,6 +773,11 @@ defmodule MishkaCmsCore.Layouts do
   """
   attr :current_user, :any, default: nil
   attr :current_site, :any, default: nil
+
+  attr :admin_site, :string,
+    default: nil,
+    doc: "the page's `@admin_site`, `MishkaCmsCore.Accounts.AdminSite`"
+
   attr :view, :atom, default: nil
   attr :items, :list, default: []
   attr :status, :list, default: [], doc: "`@topbar_status`, `MishkaCmsCore.Layouts.TopbarStatus`"
@@ -864,6 +883,15 @@ defmodule MishkaCmsCore.Layouts do
                 })}
           </div>
         </div>
+
+        <.live_component
+          :if={AdminSite.master?(@current_user)}
+          module={SiteSwitcher}
+          id="admin-site-switcher"
+          current_user={@current_user}
+          current_path={@current_path}
+          admin_site={@admin_site}
+        />
 
         <div :if={@status != []} class="relative">
           <button

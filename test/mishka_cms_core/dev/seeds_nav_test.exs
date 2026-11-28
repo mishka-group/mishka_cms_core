@@ -15,8 +15,8 @@ defmodule MishkaCmsCore.Dev.SeedsNavTest do
 
   alias MishkaCmsCore.Dev.{LocalhostPages, Seeds, SiteAPages, SiteBPages, StarterPages}
 
-  @blog {"Blog", "/blog"}
-  @docs {"Docs", "/docs"}
+  @blog %{label: "Blog", path: "/blog"}
+  @docs %{label: "Docs", path: "/docs"}
   @extensions [@blog, @docs]
 
   # EACH SITE, with the links it is for, in the order a developer reads them: the pages every dev
@@ -73,17 +73,13 @@ defmodule MishkaCmsCore.Dev.SeedsNavTest do
         assert children == StarterPages.nav() ++ Map.fetch!(module, unquote(site)).nav()
       end
 
-      # WHAT THIS BUILD HAS: the core alone has neither extension, a host with them has both.
+      # WHAT THIS BUILD HAS: the links of the `installer:seed` parts registered, and none without one.
       test "adds the extensions' pages only for the extensions this build holds" do
         base = unquote(Macro.escape(links))
         [%{children: children}] = Seeds.nav(unquote(site))
 
         assert Enum.take(children, length(base)) == base
-        assert Enum.all?(Enum.drop(children, length(base)), &(&1 in @extensions))
-
-        keys = Enum.map(Seeds.categories(), & &1.key)
-        assert @blog in children == :blog in keys
-        assert @docs in children == :document in keys
+        assert Enum.drop(children, length(base)) == MishkaCmsCore.Install.Seeds.nav()
       end
     end
   end

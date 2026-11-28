@@ -155,16 +155,16 @@ defmodule MishkaCmsCore.Runtime.SettingPoliciesTest do
       other_site: other_site
     } do
       assert {:ok, _} =
-               tenant_set(tenant, site.id, %{key: "site.title", value: %{"value" => "Mine"}})
+               tenant_set(tenant, site.id, %{key: "site.tagline", value: %{"value" => "Mine"}})
 
       assert {:error, %Ash.Error.Forbidden{}} =
                tenant_set(tenant, other_site.id, %{
-                 key: "site.title",
+                 key: "site.tagline",
                  value: %{"value" => "Mine"}
                })
 
       assert Setting
-             |> Ash.Query.filter(key == "site.title" and site_id == ^other_site.id)
+             |> Ash.Query.filter(key == "site.tagline" and site_id == ^other_site.id)
              |> Ash.read!(action: :read_any, authorize?: false) == []
     end
   end

@@ -44,7 +44,7 @@ defmodule MishkaCmsCoreWeb.Test.DashboardHomeTest do
       |> Map.put(:host, "localhost")
       |> Map.update!(:req_headers, &[{"host", "localhost"} | List.keydelete(&1, "host", 0)])
 
-    {:ok, conn: conn}
+    {:ok, conn: conn, site: site}
   end
 
   test "a master admin sees the dashboard with the widget grid", %{conn: conn} do
@@ -55,6 +55,27 @@ defmodule MishkaCmsCoreWeb.Test.DashboardHomeTest do
     assert html =~ "Dashboard"
     assert has_element?(view, "#dash-site-overview")
     assert has_element?(view, "button", "Customize")
+  end
+
+  # A SITE'S ADMIN SEES ONE SITE, so the line under the greeting does not speak of several.
+  describe "the line under the greeting" do
+    test "speaks of every site to a master", %{conn: conn} do
+      conn = log_in(conn, create_admin("boss@example.com"))
+
+      {:ok, _view, html} = live(conn, @path)
+
+      assert html =~ "Everything across your sites, at a glance."
+    end
+
+    test "speaks of their own site to a site's admin", %{conn: conn, site: site} do
+      conn =
+        log_in(conn, create_user_with_permissions!(["admin:dashboard:*"], site_id: site.id))
+
+      {:ok, _view, html} = live(conn, @path)
+
+      assert html =~ "Everything on your site, at a glance."
+      refute html =~ "across your sites"
+    end
   end
 
   describe "the door" do
