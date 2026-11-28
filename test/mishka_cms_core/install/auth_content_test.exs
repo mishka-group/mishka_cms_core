@@ -163,6 +163,17 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
       end
     end
 
+    # ONE SIGN-IN PAGE FOR EVERY ACCOUNT: buyers and members sign in where the site's team does, so
+    # it does not speak of managing the site.
+    test "the sign-in page speaks to every account, not only the site's team", %{site: site} do
+      StarterContent.ensure_auth!(site)
+
+      sources = for record <- auth_pages(site), source <- sources(record), do: source
+
+      assert Enum.any?(sources, &(&1 =~ ~s|t("Sign in to your account.")|))
+      refute Enum.any?(sources, &(&1 =~ "manage your content"))
+    end
+
     # NO ADDRESS ONLY THE OLD MARKETING PROJECT HAD. `/mish-*` pages exist on no installed site; the
     # footer's Docs and Support lead to Mishka's own site.
     test "no sign-in link leads to an address no site has", %{site: site} do

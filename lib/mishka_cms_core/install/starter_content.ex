@@ -2819,7 +2819,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
           </span>{t("Welcome")}
         </div>
         <h1 class="#{@title_class}">{t("Welcome back")}</h1>
-        <p class="#{@lede_class}">{t("Sign in to manage your content, media and team.")}</p>
+        <p class="#{@lede_class}">{t("Sign in to your account.")}</p>
 
         <.sign_in_providers
           site={assigns[:current_site]}
@@ -4222,8 +4222,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "Multi-site ready" => "آماده برای چند سایت",
       "Welcome" => "خوش آمدید",
       "Welcome back" => "خوش برگشتید",
-      "Sign in to manage your content, media and team." =>
-        "وارد شوید تا محتوا، رسانه و تیمتان را مدیریت کنید.",
+      "Sign in to your account." => "وارد حساب کاربری خود شوید.",
       "Continue with %{provider}" => "ادامه با %{provider}",
       "or with email" => "یا با ایمیل",
       "This sign-in has expired" => "این ورود منقضی شده است",
