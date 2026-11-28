@@ -924,6 +924,7 @@ defmodule MishkaCmsCore.Runtime.Site do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.MasterSiteStays, on: :create}
 
+      change Changes.SiteTitleFromName
       change Changes.InternalName
 
       description "Creates site with validated name and host domain, ensuring unique identification"

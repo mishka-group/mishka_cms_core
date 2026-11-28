@@ -27,22 +27,22 @@ defmodule MishkaCmsCore.SettingsMultitenancyTest do
   end
 
   test "a global write is shared; a site read falls back to the global", %{site: site} do
-    {:ok, _} = Settings.put("site.title", "Global Title")
+    {:ok, _} = Settings.put("site.tagline", "Global Title")
 
-    assert Settings.get("site.title") == "Global Title"
-    assert Settings.get("site.title", nil, site.id) == "Global Title"
+    assert Settings.get("site.tagline") == "Global Title"
+    assert Settings.get("site.tagline", nil, site.id) == "Global Title"
   end
 
   test "a per-site write is isolated; other sites + the global are unaffected", %{
     site: site,
     other: other
   } do
-    {:ok, _} = Settings.put("site.title", "Default")
-    {:ok, _} = Settings.put("site.title", "Acme", site_id: site.id)
+    {:ok, _} = Settings.put("site.tagline", "Default")
+    {:ok, _} = Settings.put("site.tagline", "Acme", site_id: site.id)
 
-    assert Settings.get("site.title", nil, site.id) == "Acme"
-    assert Settings.get("site.title", nil, other.id) == "Default"
-    assert Settings.get("site.title") == "Default"
+    assert Settings.get("site.tagline", nil, site.id) == "Acme"
+    assert Settings.get("site.tagline", nil, other.id) == "Default"
+    assert Settings.get("site.tagline") == "Default"
   end
 
   test "upsert keeps the global and per-site rows singular, and they coexist", %{site: site} do

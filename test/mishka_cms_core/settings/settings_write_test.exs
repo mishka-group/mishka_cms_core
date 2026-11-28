@@ -21,7 +21,7 @@ defmodule MishkaCmsCore.SettingsWriteTest do
 
   require Ash.Query
 
-  @keys ~w(cms.offline site.title)
+  @keys ~w(cms.offline site.tagline)
 
   setup do
     site = create_site!()
@@ -60,26 +60,28 @@ defmodule MishkaCmsCore.SettingsWriteTest do
     end
 
     test "writes any site's row", %{master: master, site: site, other_site: other_site} do
-      assert {:ok, "A"} = Settings.put_as(master, "site.title", "A", site_id: site.id)
-      assert {:ok, "B"} = Settings.put_as(master, "site.title", "B", site_id: other_site.id)
+      assert {:ok, "A"} = Settings.put_as(master, "site.tagline", "A", site_id: site.id)
+      assert {:ok, "B"} = Settings.put_as(master, "site.tagline", "B", site_id: other_site.id)
 
-      assert stored("site.title", site.id) == "A"
-      assert stored("site.title", other_site.id) == "B"
+      assert stored("site.tagline", site.id) == "A"
+      assert stored("site.tagline", other_site.id) == "B"
     end
   end
 
   describe "put_as/4 — tenant with roles" do
     test "writes its own site's row without naming it", %{tenant: tenant, site: site} do
-      assert {:ok, "Mine"} = Settings.put_as(tenant, "site.title", "Mine")
-      assert stored("site.title", site.id) == "Mine"
+      assert {:ok, "Mine"} = Settings.put_as(tenant, "site.tagline", "Mine")
+      assert stored("site.tagline", site.id) == "Mine"
     end
 
     test "is refused another site's row, and writes nothing", %{
       tenant: tenant,
       other_site: other_site
     } do
-      assert {:error, _} = Settings.put_as(tenant, "site.title", "Theirs", site_id: other_site.id)
-      assert stored("site.title", other_site.id) == :none
+      assert {:error, _} =
+               Settings.put_as(tenant, "site.tagline", "Theirs", site_id: other_site.id)
+
+      assert stored("site.tagline", other_site.id) == :none
     end
 
     # `site_id: nil` is indistinguishable from omitting it, and for a tenant that means "my own
@@ -96,17 +98,17 @@ defmodule MishkaCmsCore.SettingsWriteTest do
     end
 
     test "cannot overwrite a value a master set globally", %{master: master, tenant: tenant} do
-      assert {:ok, "Global"} = Settings.put_as(master, "site.title", "Global")
-      assert {:ok, "Mine"} = Settings.put_as(tenant, "site.title", "Mine")
+      assert {:ok, "Global"} = Settings.put_as(master, "site.tagline", "Global")
+      assert {:ok, "Mine"} = Settings.put_as(tenant, "site.tagline", "Mine")
 
-      assert stored("site.title", nil) == "Global"
+      assert stored("site.tagline", nil) == "Global"
     end
   end
 
   describe "put_as/4 — tenant without roles" do
     test "writes nothing at all", %{roleless: roleless, site: site} do
-      assert {:error, _} = Settings.put_as(roleless, "site.title", "Nope")
-      assert stored("site.title", site.id) == :none
+      assert {:error, _} = Settings.put_as(roleless, "site.tagline", "Nope")
+      assert stored("site.tagline", site.id) == :none
     end
   end
 
@@ -131,12 +133,12 @@ defmodule MishkaCmsCore.SettingsWriteTest do
       site: site,
       other_site: other_site
     } do
-      assert {:ok, _} = Settings.put_as(master, "site.title", "Default")
-      assert {:ok, _} = Settings.put_as(tenant, "site.title", "Mine")
+      assert {:ok, _} = Settings.put_as(master, "site.tagline", "Default")
+      assert {:ok, _} = Settings.put_as(tenant, "site.tagline", "Mine")
 
-      assert Settings.get("site.title", nil, site.id) == "Mine"
-      assert Settings.get("site.title", nil, other_site.id) == "Default"
-      assert Settings.get("site.title") == "Default"
+      assert Settings.get("site.tagline", nil, site.id) == "Mine"
+      assert Settings.get("site.tagline", nil, other_site.id) == "Default"
+      assert Settings.get("site.tagline") == "Default"
     end
   end
 

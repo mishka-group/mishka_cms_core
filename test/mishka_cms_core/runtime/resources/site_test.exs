@@ -331,6 +331,41 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
     end
   end
 
+  # THE GLOBAL TITLE IS THE FIRST SITE'S BRAND. A second site that fell through to it named itself
+  # after the first one in its page titles, link previews and emails.
+  describe "a new site's own title" do
+    setup do
+      snapshot = MishkaCmsCore.Runtime.States.SettingsState.snapshot()
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SettingsState.restore(snapshot) end)
+      {:ok, _} = MishkaCmsCore.Settings.put("site.title", "First Brand")
+      :ok
+    end
+
+    test "is the name as typed, not the global title, in SEO and in mail" do
+      site = create_site!(name: "Acme Docs", host: "acme-docs.test")
+
+      assert site.name == "acme-docs"
+      assert MishkaCmsCore.Settings.get_own("site.title", nil, site.id) == "Acme Docs"
+      assert MishkaCmsCore.Runtime.Seo.site_name(site.id, nil) == "Acme Docs"
+      assert MishkaCmsCore.Mail.site_name(site.id) == "Acme Docs"
+      assert MishkaCmsCore.Settings.get("site.title") == "First Brand"
+    end
+
+    test "is not written for the master site, whose title is the global one" do
+      site =
+        Site
+        |> Ash.Changeset.for_create(
+          :create,
+          %{name: "Main", host: "main-brand.test", master: true},
+          authorize?: false
+        )
+        |> Ash.create!()
+
+      assert MishkaCmsCore.Settings.get_own("site.title", nil, site.id) == nil
+      assert MishkaCmsCore.Runtime.Seo.site_name(site.id, nil) == "First Brand"
+    end
+  end
+
   describe "master update action" do
     test "master user updates site successfully" do
       site = create_site!(name: "Original")
